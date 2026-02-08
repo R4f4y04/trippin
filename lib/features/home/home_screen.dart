@@ -199,7 +199,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     await showDialog<void>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         bool isSaving = false;
         return StatefulBuilder(
           builder: (context, setState) => AlertDialog(
@@ -210,7 +210,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () => Navigator.of(dialogContext).pop(),
                 child: const Text('Cancel'),
               ),
               PrimaryButton(
@@ -222,15 +222,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     _showSnack('Member name is required');
                     return;
                   }
+                  if (trip.isClosed) {
+                    _showSnack('Trip is closed');
+                    return;
+                  }
                   setState(() => isSaving = true);
-                  await ref.read(membersControllerProvider.notifier).addMember(
+                  final success = await ref
+                      .read(membersControllerProvider.notifier)
+                      .addMember(
                         tripId: trip.id,
                         name: name,
                         managedBy: owner.first.id,
                       );
+                  if (dialogContext.mounted) {
+                    setState(() => isSaving = false);
+                    if (success) {
+                      Navigator.of(dialogContext).pop();
+                    }
+                  }
                   if (mounted) {
-                    Navigator.of(context).pop();
-                    _showSnack('Member added');
+                    _showSnack(success ? 'Member added' : 'Failed to add member');
                   }
                 },
               ),
