@@ -95,7 +95,13 @@ class StorageService {
   Future<Trip?> getActiveTrip() async {
     final box = await _openTripsBox();
     if (box.isEmpty) return null;
-    return box.values.first;
+    final trips = box.values.toList();
+    trips.sort((a, b) => b.lastModifiedAt.compareTo(a.lastModifiedAt));
+    try {
+      return trips.firstWhere((trip) => !trip.isClosed);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<User?> getDeviceOwner() async {

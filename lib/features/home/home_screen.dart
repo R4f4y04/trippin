@@ -37,11 +37,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: AppBar(
         title: const Text('Trippin'),
         actions: [
-          IconButton(
-            tooltip: 'Trip History',
-            icon: const Icon(Icons.history),
-            onPressed: _openTripHistory,
-          ),
           if (tripAsync.value != null)
             IconButton(
               tooltip: isClosed ? 'Reopen Trip' : 'Finish Trip',
@@ -96,7 +91,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               if (trip.isClosed)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
-                  child: _ClosedBanner(onReopen: () => _confirmReopenTrip(trip)),
+                  child: _ClosedBanner(
+                    onReopen: () => _confirmReopenTrip(trip),
+                    onStartNewTrip: _showCreateTripDialog,
+                  ),
                 ),
               const SizedBox(height: 16),
               _SectionCard(
@@ -417,6 +415,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     if (confirmed == true) {
       await ref.read(tripControllerProvider.notifier).closeTrip(trip.id);
+      await ref.read(membersControllerProvider.notifier).refresh();
+      await ref.read(expensesControllerProvider.notifier).refresh();
       _showSnack('Trip finished');
     }
   }
@@ -611,8 +611,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
 class _ClosedBanner extends StatelessWidget {
   final VoidCallback onReopen;
+  final VoidCallback onStartNewTrip;
 
-  const _ClosedBanner({required this.onReopen});
+  const _ClosedBanner({
+    required this.onReopen,
+    required this.onStartNewTrip,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -631,6 +635,10 @@ class _ClosedBanner extends StatelessWidget {
             child: Text('Trip is closed. Editing is disabled.'),
           ),
           TextButton(onPressed: onReopen, child: const Text('Reopen')),
+          TextButton(
+            onPressed: onStartNewTrip,
+            child: const Text('Start New'),
+          ),
         ],
       ),
     );

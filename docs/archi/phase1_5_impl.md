@@ -30,6 +30,8 @@ Phase 1.5 enhances the single-device experience by adding trip closure, editable
   - Finish/Reopen trip controls.
   - Read-only banner when closed.
   - Edit/Delete controls on expenses (disabled when closed).
+  - After finishing a trip, the app returns to the empty home view (no active trip).
+  - Closed banner includes a Start New Trip action.
 - Trip history list:
   - Shows all trips, status, and delete action.
 - Trip detail view:
