@@ -11,6 +11,7 @@ Expense _$ExpenseFromJson(Map<String, dynamic> json) => Expense(
       splitType: _splitTypeFromJson(json['splitType'] as String),
       createdAt: DateTime.parse(json['createdAt'] as String),
       note: json['note'] as String?,
+  name: json['name'] as String? ?? 'Untitled',
     );
 
 Map<String, dynamic> _$ExpenseToJson(Expense instance) => <String, dynamic>{
@@ -22,6 +23,7 @@ Map<String, dynamic> _$ExpenseToJson(Expense instance) => <String, dynamic>{
       'splitType': _splitTypeToJson(instance.splitType),
       'createdAt': instance.createdAt.toIso8601String(),
       'note': instance.note,
+  'name': instance.name,
     };
 
 const _$SplitTypeEnumMap = {

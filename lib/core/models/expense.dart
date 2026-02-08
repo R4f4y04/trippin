@@ -33,6 +33,10 @@ class Expense {
   @HiveField(7)
   final String? note;
 
+  @HiveField(8)
+  @JsonKey(defaultValue: 'Untitled')
+  final String name;
+
   Expense({
     required this.id,
     required this.tripId,
@@ -42,6 +46,7 @@ class Expense {
     required this.splitType,
     required this.createdAt,
     required this.note,
+    required this.name,
   });
 
   factory Expense.create({
@@ -49,6 +54,7 @@ class Expense {
     required String payerId,
     required double amount,
     required List<String> beneficiaryIds,
+    required String name,
     SplitType splitType = SplitType.equal,
     String? note,
   }) {
@@ -61,6 +67,7 @@ class Expense {
       splitType: splitType,
       createdAt: DateTime.now(),
       note: note,
+      name: name,
     );
   }
 
@@ -73,6 +80,7 @@ class Expense {
     SplitType? splitType,
     DateTime? createdAt,
     String? note,
+    String? name,
   }) {
     return Expense(
       id: id ?? this.id,
@@ -83,6 +91,7 @@ class Expense {
       splitType: splitType ?? this.splitType,
       createdAt: createdAt ?? this.createdAt,
       note: note ?? this.note,
+      name: name ?? this.name,
     );
   }
 
@@ -110,13 +119,14 @@ class ExpenseAdapter extends TypeAdapter<Expense> {
       splitType: fields[5] as SplitType,
       createdAt: fields[6] as DateTime,
       note: fields[7] as String?,
+      name: fields[8] as String? ?? 'Untitled',
     );
   }
 
   @override
   void write(BinaryWriter writer, Expense obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -132,6 +142,8 @@ class ExpenseAdapter extends TypeAdapter<Expense> {
       ..writeByte(6)
       ..write(obj.createdAt)
       ..writeByte(7)
-      ..write(obj.note);
+      ..write(obj.note)
+      ..writeByte(8)
+      ..write(obj.name);
   }
 }

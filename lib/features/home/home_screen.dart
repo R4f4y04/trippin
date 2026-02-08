@@ -212,6 +212,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return;
     }
 
+    final nameController = TextEditingController();
     final amountController = TextEditingController();
     final noteController = TextEditingController();
     String? payerId = members.first.id;
@@ -228,6 +229,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(labelText: 'Expense Name'),
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: amountController,
                     keyboardType:
@@ -289,6 +295,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 label: 'Save',
                 isLoading: isSaving,
                 onPressed: () async {
+                  final expenseName = nameController.text.trim();
+                  if (expenseName.isEmpty) {
+                    _showSnack('Expense name is required');
+                    return;
+                  }
                   final amountText = amountController.text.trim();
                   final amount = double.tryParse(amountText) ?? 0;
                   if (amount <= 0 || payerId == null) {
@@ -305,6 +316,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         payerId: payerId!,
                         amount: amount,
                         beneficiaryIds: selectedBeneficiaries.toList(),
+                    name: expenseName,
                         note: noteController.text.trim().isEmpty
                             ? null
                             : noteController.text.trim(),
@@ -437,7 +449,8 @@ class _ExpensesList extends StatelessWidget {
             (expense) => ListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
-              title: Text('PKR ${expense.amount.toStringAsFixed(2)}'),
+              title: Text(expense.name),
+              trailing: Text('PKR ${expense.amount.toStringAsFixed(2)}'),
               subtitle: Text(
                 'Paid by ${memberMap[expense.payerId] ?? 'Unknown'} · '
                 '${expense.beneficiaryIds.length} beneficiaries',

@@ -19,7 +19,7 @@ Phase 1 establishes the offline-first, single-device experience. It introduces S
 - Join code generated locally.
 
 ### Expense
-- Fields: `id`, `tripId`, `payerId`, `amount`, `beneficiaryIds`, `splitType`, `createdAt`, `note`.
+- Fields: `id`, `tripId`, `payerId`, `name`, `amount`, `beneficiaryIds`, `splitType`, `createdAt`, `note`.
 - Split type limited to `equal`.
 
 ## Services
@@ -42,7 +42,7 @@ Phase 1 establishes the offline-first, single-device experience. It introduces S
 - Home screen provides:
   - Trip creation (title + owner name).
   - Member management (adds passive members).
-  - Expense logging (amount, payer, beneficiaries, note).
+  - Expense logging (name, amount, payer, beneficiaries, note).
   - Net balance list.
 
 ## Gotchas

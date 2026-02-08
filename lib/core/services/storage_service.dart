@@ -153,6 +153,7 @@ class StorageService {
     required String payerId,
     required double amount,
     required List<String> beneficiaryIds,
+    required String name,
     String? note,
   }) async {
     final trip = await getTrip(tripId);
@@ -169,6 +170,7 @@ class StorageService {
       payerId: payerId,
       amount: amount,
       beneficiaryIds: beneficiaryIds,
+      name: name,
       note: note,
     );
 

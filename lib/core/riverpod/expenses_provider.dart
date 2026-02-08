@@ -24,6 +24,7 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
     required String payerId,
     required double amount,
     required List<String> beneficiaryIds,
+    required String name,
     String? note,
   }) async {
     await _storage.addExpense(
@@ -31,6 +32,7 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
       payerId: payerId,
       amount: amount,
       beneficiaryIds: beneficiaryIds,
+      name: name,
       note: note,
     );
     await refresh();
