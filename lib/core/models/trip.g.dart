@@ -10,6 +10,13 @@ Trip _$TripFromJson(Map<String, dynamic> json) => Trip(
       expenseIds: (json['expenseIds'] as List<dynamic>).cast<String>(),
       joinCode: json['joinCode'] as String,
       coverImagePath: json['coverImagePath'] as String?,
+    isClosed: json['isClosed'] as bool? ?? false,
+    closedAt: json['closedAt'] == null
+      ? null
+      : DateTime.parse(json['closedAt'] as String),
+    lastModifiedAt: json['lastModifiedAt'] == null
+      ? DateTime.parse(json['createdAt'] as String)
+      : DateTime.parse(json['lastModifiedAt'] as String),
     );
 
 Map<String, dynamic> _$TripToJson(Trip instance) => <String, dynamic>{
@@ -20,4 +27,7 @@ Map<String, dynamic> _$TripToJson(Trip instance) => <String, dynamic>{
       'expenseIds': instance.expenseIds,
       'joinCode': instance.joinCode,
       'coverImagePath': instance.coverImagePath,
+  'isClosed': instance.isClosed,
+  'closedAt': instance.closedAt?.toIso8601String(),
+  'lastModifiedAt': instance.lastModifiedAt.toIso8601String(),
     };

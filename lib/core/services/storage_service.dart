@@ -2,8 +2,10 @@ import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/expense.dart';
+import '../models/expense_revision.dart';
 import '../models/split_type_adapter.dart';
 import '../models/trip.dart';
+import '../models/trip_history_event.dart';
 import '../models/user.dart';
 import '../utils/app_logger.dart';
 import '../utils/safe_execute.dart';
@@ -16,10 +18,14 @@ class StorageService {
   static const _usersBoxName = 'users';
   static const _tripsBoxName = 'trips';
   static const _expensesBoxName = 'expenses';
+  static const _expenseRevisionsBoxName = 'expense_revisions';
+  static const _tripHistoryBoxName = 'trip_history';
 
   Box<User>? _usersBox;
   Box<Trip>? _tripsBox;
   Box<Expense>? _expensesBox;
+  Box<ExpenseRevision>? _expenseRevisionsBox;
+  Box<TripHistoryEvent>? _tripHistoryBox;
 
   Future<void> initialize() async {
     await safeExecute(
@@ -46,6 +52,12 @@ class StorageService {
     if (!Hive.isAdapterRegistered(3)) {
       Hive.registerAdapter(SplitTypeAdapter());
     }
+    if (!Hive.isAdapterRegistered(4)) {
+      Hive.registerAdapter(ExpenseRevisionAdapter());
+    }
+    if (!Hive.isAdapterRegistered(5)) {
+      Hive.registerAdapter(TripHistoryEventAdapter());
+    }
   }
 
   Future<Box<User>> _openUsersBox() async {
@@ -64,6 +76,20 @@ class StorageService {
     if (_expensesBox?.isOpen ?? false) return _expensesBox!;
     _expensesBox = await Hive.openBox<Expense>(_expensesBoxName);
     return _expensesBox!;
+  }
+
+  Future<Box<ExpenseRevision>> _openExpenseRevisionsBox() async {
+    if (_expenseRevisionsBox?.isOpen ?? false) return _expenseRevisionsBox!;
+    _expenseRevisionsBox =
+        await Hive.openBox<ExpenseRevision>(_expenseRevisionsBoxName);
+    return _expenseRevisionsBox!;
+  }
+
+  Future<Box<TripHistoryEvent>> _openTripHistoryBox() async {
+    if (_tripHistoryBox?.isOpen ?? false) return _tripHistoryBox!;
+    _tripHistoryBox =
+        await Hive.openBox<TripHistoryEvent>(_tripHistoryBoxName);
+    return _tripHistoryBox!;
   }
 
   Future<Trip?> getActiveTrip() async {
@@ -107,6 +133,12 @@ class StorageService {
       operation: () async {
         await tripsBox.put(updatedTrip.id, updatedTrip);
         await usersBox.put(owner.id, owner);
+        await _appendHistoryEvent(
+          tripId: updatedTrip.id,
+          type: 'CREATE_TRIP',
+          summary: 'Trip created by ${owner.name}',
+          actorId: owner.id,
+        );
       },
       onError: (error, stackTrace) {
         AppLogger.error('Failed to create trip', error, stackTrace);
@@ -126,6 +158,10 @@ class StorageService {
       AppLogger.warning('Attempted to add member to missing trip');
       return null;
     }
+    if (trip.isClosed) {
+      AppLogger.warning('Attempted to add member to closed trip');
+      return null;
+    }
 
     final usersBox = await _openUsersBox();
     final tripsBox = await _openTripsBox();
@@ -133,12 +169,19 @@ class StorageService {
     final member = User.createMember(name: name, managedBy: managedBy);
     final updatedTrip = trip.copyWith(
       memberIds: [...trip.memberIds, member.id],
+      lastModifiedAt: DateTime.now(),
     );
 
     await safeExecute(
       operation: () async {
         await usersBox.put(member.id, member);
         await tripsBox.put(updatedTrip.id, updatedTrip);
+        await _appendHistoryEvent(
+          tripId: updatedTrip.id,
+          type: 'ADD_MEMBER',
+          summary: 'Added member ${member.name}',
+          actorId: managedBy,
+        );
       },
       onError: (error, stackTrace) {
         AppLogger.error('Failed to add member', error, stackTrace);
@@ -161,6 +204,10 @@ class StorageService {
       AppLogger.warning('Attempted to add expense to missing trip');
       return null;
     }
+    if (trip.isClosed) {
+      AppLogger.warning('Attempted to add expense to closed trip');
+      return null;
+    }
 
     final expensesBox = await _openExpensesBox();
     final tripsBox = await _openTripsBox();
@@ -176,12 +223,19 @@ class StorageService {
 
     final updatedTrip = trip.copyWith(
       expenseIds: [...trip.expenseIds, expense.id],
+      lastModifiedAt: DateTime.now(),
     );
 
     await safeExecute(
       operation: () async {
         await expensesBox.put(expense.id, expense);
         await tripsBox.put(updatedTrip.id, updatedTrip);
+        await _appendHistoryEvent(
+          tripId: updatedTrip.id,
+          type: 'ADD_EXPENSE',
+          summary: 'Added expense ${expense.name}',
+          actorId: payerId,
+        );
       },
       onError: (error, stackTrace) {
         AppLogger.error('Failed to add expense', error, stackTrace);
@@ -196,9 +250,233 @@ class StorageService {
     return box.get(id);
   }
 
+  Future<List<TripHistoryEvent>> getTripHistory(String tripId) async {
+    final box = await _openTripHistoryBox();
+    return box.values
+        .where((event) => event.tripId == tripId)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  Future<List<ExpenseRevision>> getExpenseRevisions(String expenseId) async {
+    final box = await _openExpenseRevisionsBox();
+    return box.values
+        .where((revision) => revision.expenseId == expenseId)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
   Future<List<Trip>> getTrips() async {
     final box = await _openTripsBox();
-    return box.values.toList();
+    final trips = box.values.toList();
+    trips.sort((a, b) => b.lastModifiedAt.compareTo(a.lastModifiedAt));
+    return trips;
+  }
+
+  Future<Trip?> closeTrip({required String tripId, String? actorId}) async {
+    final trip = await getTrip(tripId);
+    if (trip == null) return null;
+    if (trip.isClosed) return trip;
+
+    final updatedTrip = trip.copyWith(
+      isClosed: true,
+      closedAt: DateTime.now(),
+      lastModifiedAt: DateTime.now(),
+    );
+
+    await safeExecute(
+      operation: () async {
+        final tripsBox = await _openTripsBox();
+        await tripsBox.put(updatedTrip.id, updatedTrip);
+        await _appendHistoryEvent(
+          tripId: updatedTrip.id,
+          type: 'CLOSE_TRIP',
+          summary: 'Trip closed',
+          actorId: actorId,
+        );
+      },
+      onError: (error, stackTrace) {
+        AppLogger.error('Failed to close trip', error, stackTrace);
+      },
+    );
+
+    return updatedTrip;
+  }
+
+  Future<Trip?> reopenTrip({required String tripId, String? actorId}) async {
+    final trip = await getTrip(tripId);
+    if (trip == null) return null;
+    if (!trip.isClosed) return trip;
+
+    final updatedTrip = trip.copyWith(
+      isClosed: false,
+      closedAt: null,
+      lastModifiedAt: DateTime.now(),
+    );
+
+    await safeExecute(
+      operation: () async {
+        final tripsBox = await _openTripsBox();
+        await tripsBox.put(updatedTrip.id, updatedTrip);
+        await _appendHistoryEvent(
+          tripId: updatedTrip.id,
+          type: 'REOPEN_TRIP',
+          summary: 'Trip reopened',
+          actorId: actorId,
+        );
+      },
+      onError: (error, stackTrace) {
+        AppLogger.error('Failed to reopen trip', error, stackTrace);
+      },
+    );
+
+    return updatedTrip;
+  }
+
+  Future<Expense?> updateExpense({
+    required String expenseId,
+    required String name,
+    required double amount,
+    required String payerId,
+    required List<String> beneficiaryIds,
+    String? note,
+    String? editorId,
+  }) async {
+    final expensesBox = await _openExpensesBox();
+    final existing = expensesBox.get(expenseId);
+    if (existing == null) return null;
+
+    final trip = await getTrip(existing.tripId);
+    if (trip == null) return null;
+    if (trip.isClosed) {
+      AppLogger.warning('Attempted to edit expense in closed trip');
+      return null;
+    }
+
+    final revision = ExpenseRevision.create(
+      expense: existing,
+      editorId: editorId,
+    );
+
+    final updated = existing.copyWith(
+      name: name,
+      amount: amount,
+      payerId: payerId,
+      beneficiaryIds: beneficiaryIds,
+      note: note,
+      createdAt: existing.createdAt,
+    );
+
+    final updatedTrip = trip.copyWith(lastModifiedAt: DateTime.now());
+
+    await safeExecute(
+      operation: () async {
+        final revisionBox = await _openExpenseRevisionsBox();
+        final tripsBox = await _openTripsBox();
+        await revisionBox.put(revision.id, revision);
+        await expensesBox.put(updated.id, updated);
+        await tripsBox.put(updatedTrip.id, updatedTrip);
+        await _appendHistoryEvent(
+          tripId: updatedTrip.id,
+          type: 'EDIT_EXPENSE',
+          summary: 'Edited expense ${updated.name}',
+          actorId: editorId ?? payerId,
+        );
+      },
+      onError: (error, stackTrace) {
+        AppLogger.error('Failed to update expense', error, stackTrace);
+      },
+    );
+
+    return updated;
+  }
+
+  Future<bool> deleteExpense({
+    required String expenseId,
+    String? editorId,
+  }) async {
+    final expensesBox = await _openExpensesBox();
+    final existing = expensesBox.get(expenseId);
+    if (existing == null) return false;
+
+    final trip = await getTrip(existing.tripId);
+    if (trip == null) return false;
+    if (trip.isClosed) {
+      AppLogger.warning('Attempted to delete expense in closed trip');
+      return false;
+    }
+
+    final revision = ExpenseRevision.create(
+      expense: existing,
+      editorId: editorId,
+    );
+
+    final updatedTrip = trip.copyWith(
+      expenseIds: trip.expenseIds.where((id) => id != expenseId).toList(),
+      lastModifiedAt: DateTime.now(),
+    );
+
+    await safeExecute(
+      operation: () async {
+        final revisionBox = await _openExpenseRevisionsBox();
+        final tripsBox = await _openTripsBox();
+        await revisionBox.put(revision.id, revision);
+        await expensesBox.delete(expenseId);
+        await tripsBox.put(updatedTrip.id, updatedTrip);
+        await _appendHistoryEvent(
+          tripId: updatedTrip.id,
+          type: 'DELETE_EXPENSE',
+          summary: 'Deleted expense ${existing.name}',
+          actorId: editorId ?? existing.payerId,
+        );
+      },
+      onError: (error, stackTrace) {
+        AppLogger.error('Failed to delete expense', error, stackTrace);
+      },
+    );
+
+    return true;
+  }
+
+  Future<bool> deleteTrip(String tripId) async {
+    final trip = await getTrip(tripId);
+    if (trip == null) return false;
+
+    await safeExecute(
+      operation: () async {
+        final tripsBox = await _openTripsBox();
+        final expensesBox = await _openExpensesBox();
+        final revisionBox = await _openExpenseRevisionsBox();
+        final historyBox = await _openTripHistoryBox();
+
+        for (final expenseId in trip.expenseIds) {
+          await expensesBox.delete(expenseId);
+        }
+
+        final revisionKeys = revisionBox.values
+            .where((revision) => revision.tripId == tripId)
+            .map((revision) => revision.id)
+            .toList();
+        for (final key in revisionKeys) {
+          await revisionBox.delete(key);
+        }
+
+        final historyKeys = historyBox.values
+            .where((event) => event.tripId == tripId)
+            .map((event) => event.id)
+            .toList();
+        for (final key in historyKeys) {
+          await historyBox.delete(key);
+        }
+
+        await tripsBox.delete(tripId);
+      },
+      onError: (error, stackTrace) {
+        AppLogger.error('Failed to delete trip', error, stackTrace);
+      },
+    );
+
+    return true;
   }
 
   Future<void> resetAll() async {
@@ -207,13 +485,33 @@ class StorageService {
         final tripsBox = await _openTripsBox();
         final usersBox = await _openUsersBox();
         final expensesBox = await _openExpensesBox();
+        final revisionsBox = await _openExpenseRevisionsBox();
+        final historyBox = await _openTripHistoryBox();
         await tripsBox.clear();
         await usersBox.clear();
         await expensesBox.clear();
+        await revisionsBox.clear();
+        await historyBox.clear();
       },
       onError: (error, stackTrace) {
         AppLogger.error('Failed to reset storage', error, stackTrace);
       },
     );
+  }
+
+  Future<void> _appendHistoryEvent({
+    required String tripId,
+    required String type,
+    required String summary,
+    String? actorId,
+  }) async {
+    final historyBox = await _openTripHistoryBox();
+    final event = TripHistoryEvent.create(
+      tripId: tripId,
+      type: type,
+      summary: summary,
+      actorId: actorId,
+    );
+    await historyBox.put(event.id, event);
   }
 }

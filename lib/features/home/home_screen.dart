@@ -9,6 +9,7 @@ import '../../core/riverpod/expenses_provider.dart';
 import '../../core/riverpod/members_provider.dart';
 import '../../core/riverpod/trip_provider.dart';
 import '../../ui_components/primary_button.dart';
+import '../history/trip_history_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -27,22 +28,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     final members = membersAsync.value ?? [];
     final expenses = expensesAsync.value ?? [];
+    final isClosed = tripAsync.value?.isClosed ?? false;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Trippin'),
         actions: [
+          IconButton(
+            tooltip: 'Trip History',
+            icon: const Icon(Icons.history),
+            onPressed: _openTripHistory,
+          ),
+          if (tripAsync.value != null)
+            IconButton(
+              tooltip: isClosed ? 'Reopen Trip' : 'Finish Trip',
+              icon: Icon(isClosed ? Icons.lock_open : Icons.check_circle),
+              onPressed: () => isClosed
+                  ? _confirmReopenTrip(tripAsync.value!)
+                  : _confirmCloseTrip(tripAsync.value!),
+            ),
           if (tripAsync.value != null)
             IconButton(
               tooltip: 'Add Member',
               icon: const Icon(Icons.person_add_alt_1),
-              onPressed: () => _showAddMemberDialog(tripAsync.value!, members),
+              onPressed: isClosed
+                  ? null
+                  : () => _showAddMemberDialog(tripAsync.value!, members),
             ),
           if (tripAsync.value != null)
             IconButton(
               tooltip: 'Add Expense',
               icon: const Icon(Icons.add_card),
-              onPressed: () => _showAddExpenseDialog(tripAsync.value!, members),
+              onPressed: isClosed
+                  ? null
+                  : () => _showAddExpenseDialog(tripAsync.value!, members),
             ),
         ],
       ),
@@ -65,6 +84,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               _TripSummaryCard(trip: trip, memberCount: members.length),
+              if (trip.isClosed)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: _ClosedBanner(onReopen: () => _confirmReopenTrip(trip)),
+                ),
               const SizedBox(height: 16),
               _SectionCard(
                 title: 'Members',
@@ -76,6 +100,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: _ExpensesList(
                   expenses: expenses,
                   memberMap: memberMap,
+                  isReadOnly: trip.isClosed,
+                  onEdit: (expense) =>
+                      _showEditExpenseDialog(trip, members, expense),
+                  onDelete: (expense) => _confirmDeleteExpense(expense),
                 ),
               ),
               const SizedBox(height: 16),
@@ -334,9 +362,249 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  void _openTripHistory() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const TripHistoryScreen()),
+    );
+  }
+
+  Future<void> _confirmCloseTrip(Trip trip) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Finish Trip'),
+        content: const Text('This will make the trip read-only.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Finish'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ref.read(tripControllerProvider.notifier).closeTrip(trip.id);
+      _showSnack('Trip finished');
+    }
+  }
+
+  Future<void> _confirmReopenTrip(Trip trip) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Reopen Trip'),
+        content: const Text('This will allow editing again.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Reopen'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ref.read(tripControllerProvider.notifier).reopenTrip(trip.id);
+      _showSnack('Trip reopened');
+    }
+  }
+
+  Future<void> _showEditExpenseDialog(
+    Trip trip,
+    List<User> members,
+    Expense expense,
+  ) async {
+    final nameController = TextEditingController(text: expense.name);
+    final amountController =
+        TextEditingController(text: expense.amount.toString());
+    final noteController = TextEditingController(text: expense.note ?? '');
+    String? payerId = expense.payerId;
+    final selectedBeneficiaries = <String>{...expense.beneficiaryIds};
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        bool isSaving = false;
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('Edit Expense'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(labelText: 'Expense Name'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: amountController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Amount'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: payerId,
+                    decoration: const InputDecoration(labelText: 'Payer'),
+                    items: members
+                        .map(
+                          (member) => DropdownMenuItem(
+                            value: member.id,
+                            child: Text(member.name),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => setState(() => payerId = value),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Beneficiaries',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  ...members.map(
+                    (member) => CheckboxListTile(
+                      value: selectedBeneficiaries.contains(member.id),
+                      title: Text(member.name),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      onChanged: (checked) {
+                        setState(() {
+                          if (checked == true) {
+                            selectedBeneficiaries.add(member.id);
+                          } else {
+                            selectedBeneficiaries.remove(member.id);
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: noteController,
+                    decoration:
+                        const InputDecoration(labelText: 'Note (Optional)'),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              PrimaryButton(
+                label: 'Save',
+                isLoading: isSaving,
+                onPressed: () async {
+                  final expenseName = nameController.text.trim();
+                  if (expenseName.isEmpty) {
+                    _showSnack('Expense name is required');
+                    return;
+                  }
+                  final amountText = amountController.text.trim();
+                  final amount = double.tryParse(amountText) ?? 0;
+                  if (amount <= 0 || payerId == null) {
+                    _showSnack('Enter a valid amount and payer');
+                    return;
+                  }
+                  if (selectedBeneficiaries.isEmpty) {
+                    _showSnack('Select at least one beneficiary');
+                    return;
+                  }
+                  setState(() => isSaving = true);
+                  await ref.read(expensesControllerProvider.notifier).updateExpense(
+                        expenseId: expense.id,
+                        name: expenseName,
+                        amount: amount,
+                        payerId: payerId!,
+                        beneficiaryIds: selectedBeneficiaries.toList(),
+                        note: noteController.text.trim().isEmpty
+                            ? null
+                            : noteController.text.trim(),
+                      );
+                  if (mounted) {
+                    Navigator.of(context).pop();
+                    _showSnack('Expense updated');
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _confirmDeleteExpense(Expense expense) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Expense'),
+        content: Text('Delete ${expense.name}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ref
+          .read(expensesControllerProvider.notifier)
+          .deleteExpense(expenseId: expense.id);
+      _showSnack('Expense deleted');
+    }
+  }
+
   void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
+    );
+  }
+}
+
+class _ClosedBanner extends StatelessWidget {
+  final VoidCallback onReopen;
+
+  const _ClosedBanner({required this.onReopen});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).colorScheme.secondary),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.lock_outline),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text('Trip is closed. Editing is disabled.'),
+          ),
+          TextButton(onPressed: onReopen, child: const Text('Reopen')),
+        ],
+      ),
     );
   }
 }
@@ -431,10 +699,16 @@ class _MembersList extends StatelessWidget {
 class _ExpensesList extends StatelessWidget {
   final List<Expense> expenses;
   final Map<String, String> memberMap;
+  final bool isReadOnly;
+  final ValueChanged<Expense> onEdit;
+  final ValueChanged<Expense> onDelete;
 
   const _ExpensesList({
     required this.expenses,
     required this.memberMap,
+    required this.isReadOnly,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   @override

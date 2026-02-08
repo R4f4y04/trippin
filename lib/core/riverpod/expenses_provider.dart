@@ -38,6 +38,30 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
     await refresh();
   }
 
+  Future<void> updateExpense({
+    required String expenseId,
+    required String name,
+    required double amount,
+    required String payerId,
+    required List<String> beneficiaryIds,
+    String? note,
+  }) async {
+    await _storage.updateExpense(
+      expenseId: expenseId,
+      name: name,
+      amount: amount,
+      payerId: payerId,
+      beneficiaryIds: beneficiaryIds,
+      note: note,
+    );
+    await refresh();
+  }
+
+  Future<void> deleteExpense({required String expenseId}) async {
+    await _storage.deleteExpense(expenseId: expenseId);
+    await refresh();
+  }
+
   Future<void> refresh() async {
     state = const AsyncLoading();
     final trip = await ref.read(tripControllerProvider.future);

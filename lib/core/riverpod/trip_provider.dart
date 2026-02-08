@@ -31,4 +31,16 @@ class TripController extends AsyncNotifier<Trip?> {
     state = const AsyncLoading();
     state = AsyncData(await _storage.getActiveTrip());
   }
+
+  Future<void> closeTrip(String tripId) async {
+    state = const AsyncLoading();
+    await _storage.closeTrip(tripId: tripId);
+    state = AsyncData(await _storage.getActiveTrip());
+  }
+
+  Future<void> reopenTrip(String tripId) async {
+    state = const AsyncLoading();
+    await _storage.reopenTrip(tripId: tripId);
+    state = AsyncData(await _storage.getActiveTrip());
+  }
 }

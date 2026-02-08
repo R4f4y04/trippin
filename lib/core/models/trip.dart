@@ -30,6 +30,15 @@ class Trip {
   @HiveField(6)
   final String? coverImagePath;
 
+  @HiveField(7)
+  final bool isClosed;
+
+  @HiveField(8)
+  final DateTime? closedAt;
+
+  @HiveField(9)
+  final DateTime lastModifiedAt;
+
   Trip({
     required this.id,
     required this.title,
@@ -38,17 +47,24 @@ class Trip {
     required this.expenseIds,
     required this.joinCode,
     required this.coverImagePath,
+    required this.isClosed,
+    required this.closedAt,
+    required this.lastModifiedAt,
   });
 
   factory Trip.create({required String title}) {
+    final now = DateTime.now();
     return Trip(
       id: const Uuid().v4(),
       title: title,
-      createdAt: DateTime.now(),
+      createdAt: now,
       memberIds: const [],
       expenseIds: const [],
       joinCode: _generateJoinCode(),
       coverImagePath: null,
+      isClosed: false,
+      closedAt: null,
+      lastModifiedAt: now,
     );
   }
 
@@ -60,6 +76,9 @@ class Trip {
     List<String>? expenseIds,
     String? joinCode,
     String? coverImagePath,
+    bool? isClosed,
+    DateTime? closedAt,
+    DateTime? lastModifiedAt,
   }) {
     return Trip(
       id: id ?? this.id,
@@ -69,6 +88,9 @@ class Trip {
       expenseIds: expenseIds ?? List<String>.from(this.expenseIds),
       joinCode: joinCode ?? this.joinCode,
       coverImagePath: coverImagePath ?? this.coverImagePath,
+      isClosed: isClosed ?? this.isClosed,
+      closedAt: closedAt ?? this.closedAt,
+      lastModifiedAt: lastModifiedAt ?? this.lastModifiedAt,
     );
   }
 
@@ -101,13 +123,17 @@ class TripAdapter extends TypeAdapter<Trip> {
       expenseIds: (fields[4] as List).cast<String>(),
       joinCode: fields[5] as String,
       coverImagePath: fields[6] as String?,
+      isClosed: fields[7] as bool? ?? false,
+      closedAt: fields[8] as DateTime?,
+      lastModifiedAt:
+          fields[9] as DateTime? ?? (fields[2] as DateTime),
     );
   }
 
   @override
   void write(BinaryWriter writer, Trip obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -121,6 +147,12 @@ class TripAdapter extends TypeAdapter<Trip> {
       ..writeByte(5)
       ..write(obj.joinCode)
       ..writeByte(6)
-      ..write(obj.coverImagePath);
+      ..write(obj.coverImagePath)
+      ..writeByte(7)
+      ..write(obj.isClosed)
+      ..writeByte(8)
+      ..write(obj.closedAt)
+      ..writeByte(9)
+      ..write(obj.lastModifiedAt);
   }
 }
