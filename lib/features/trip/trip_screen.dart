@@ -7,6 +7,7 @@ import '../../core/models/user.dart';
 import '../../core/riverpod/balances_provider.dart';
 import '../../core/riverpod/expenses_provider.dart';
 import '../../core/riverpod/members_provider.dart';
+import '../../core/riverpod/trip_list_provider.dart';
 import '../../core/riverpod/trip_provider.dart';
 import '../../ui_components/primary_button.dart';
 import 'components/balances_list.dart';
@@ -381,6 +382,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
       await ref.read(tripControllerProvider.notifier).closeTrip(trip.id);
       await ref.read(membersControllerProvider.notifier).refresh();
       await ref.read(expensesControllerProvider.notifier).refresh();
+      await ref.read(tripListControllerProvider.notifier).refresh();
       _showSnack('Trip finished');
     }
   }
