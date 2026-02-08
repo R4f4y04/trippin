@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../ui_components/primary_button.dart';
+import 'components/action_pill.dart';
 
 class EmptyHomeScreen extends StatelessWidget {
   final VoidCallback onStartTrip;
@@ -57,17 +58,17 @@ class EmptyHomeScreen extends StatelessWidget {
               runSpacing: 12,
               alignment: WrapAlignment.center,
               children: [
-                _ActionPill(
+                ActionPill(
                   label: 'History',
                   icon: Icons.history,
                   onPressed: onOpenHistory,
                 ),
-                _ActionPill(
+                ActionPill(
                   label: 'Settings',
                   icon: Icons.settings,
                   onPressed: onOpenSettings,
                 ),
-                _ActionPill(
+                ActionPill(
                   label: 'About',
                   icon: Icons.info_outline,
                   onPressed: onOpenAbout,
@@ -76,33 +77,6 @@ class EmptyHomeScreen extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _ActionPill extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onPressed;
-
-  const _ActionPill({
-    required this.label,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 18, color: colorScheme.secondary),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: colorScheme.onSurface,
-        side: BorderSide(color: colorScheme.secondary),
-        shape: const StadiumBorder(),
       ),
     );
   }
