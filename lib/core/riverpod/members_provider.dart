@@ -29,6 +29,7 @@ class MembersController extends AsyncNotifier<List<User>> {
       name: name,
       managedBy: managedBy,
     );
+    await ref.read(tripControllerProvider.notifier).refresh();
     await refresh();
   }
 
