@@ -14,7 +14,7 @@ Implemented a clean landing experience when no trip is active. The screen center
 
 ## Navigation
 - Home (no active trip) → History / Settings / About screens.
-- Active trip view remains unchanged for now.
+- Active trip now routes to a dedicated Trip screen under `lib/features/trip/`.
 
 ## Files
 - [lib/features/home/empty_home_screen.dart](lib/features/home/empty_home_screen.dart)
@@ -23,6 +23,7 @@ Implemented a clean landing experience when no trip is active. The screen center
 - [lib/core/services/storage_service.dart](lib/core/services/storage_service.dart)
 - [lib/core/riverpod/trip_provider.dart](lib/core/riverpod/trip_provider.dart)
 - [lib/features/home/home_screen.dart](lib/features/home/home_screen.dart)
+- [lib/features/trip/trip_screen.dart](lib/features/trip/trip_screen.dart)
 
 ## Gotchas
 - Sample trip should only be used for onboarding; it does not replace existing data.

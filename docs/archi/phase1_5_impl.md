@@ -8,6 +8,7 @@ Phase 1.5 enhances the single-device experience by adding trip closure, editable
 - `Trip` now tracks `isClosed`, `closedAt`, and `lastModifiedAt`.
 - Closed trips disable add/edit/delete actions in UI and storage.
 - Reopen restores editing while keeping immutable history.
+- Closing a trip refreshes the trip list provider so History updates immediately.
 
 ### Expense Revision History
 - Added `ExpenseRevision` to persist previous expense values before updates/deletes.

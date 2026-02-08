@@ -51,3 +51,8 @@ Standard: A owes B, B owes C.
 Optimized: A pays C directly to minimize the number of transactions.
 
 Export: Generate a readable summary (Text or Image) that lists the final settlements clearly.
+
+Recent Updates (2026-02-08)
+- Split the active trip UI into a dedicated feature folder and components.
+- Home screen now routes to the trip feature when a trip is active.
+- Trip history refreshes immediately after finishing a trip.
