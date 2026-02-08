@@ -148,6 +148,60 @@ class StorageService {
     return updatedTrip;
   }
 
+  Future<Trip?> createSampleTrip() async {
+    final trip = await createTripWithOwner(
+      title: 'Sample Trip',
+      ownerName: 'You',
+    );
+
+    if (trip.memberIds.isEmpty) return trip;
+    final ownerId = trip.memberIds.first;
+
+    final memberA = await addMemberToTrip(
+      tripId: trip.id,
+      name: 'Ayesha',
+      managedBy: ownerId,
+    );
+    final memberB = await addMemberToTrip(
+      tripId: trip.id,
+      name: 'Hassan',
+      managedBy: ownerId,
+    );
+
+    final members = [
+      ownerId,
+      if (memberA != null) memberA.id,
+      if (memberB != null) memberB.id,
+    ];
+
+    if (members.isNotEmpty) {
+      await addExpense(
+        tripId: trip.id,
+        payerId: ownerId,
+        amount: 1200,
+        beneficiaryIds: members,
+        name: 'Fuel Stop',
+        note: 'Highway fuel',
+      );
+      await addExpense(
+        tripId: trip.id,
+        payerId: memberA?.id ?? ownerId,
+        amount: 650,
+        beneficiaryIds: members,
+        name: 'Snacks',
+      );
+      await addExpense(
+        tripId: trip.id,
+        payerId: memberB?.id ?? ownerId,
+        amount: 900,
+        beneficiaryIds: members,
+        name: 'Boat Ride',
+      );
+    }
+
+    return trip;
+  }
+
   Future<User?> addMemberToTrip({
     required String tripId,
     required String name,

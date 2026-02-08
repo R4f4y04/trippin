@@ -1,0 +1,109 @@
+import 'package:flutter/material.dart';
+
+import '../../ui_components/primary_button.dart';
+
+class EmptyHomeScreen extends StatelessWidget {
+  final VoidCallback onStartTrip;
+  final VoidCallback onOpenHistory;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onOpenAbout;
+  final VoidCallback onCreateSampleTrip;
+
+  const EmptyHomeScreen({
+    super.key,
+    required this.onStartTrip,
+    required this.onOpenHistory,
+    required this.onOpenSettings,
+    required this.onOpenAbout,
+    required this.onCreateSampleTrip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Trippin',
+              style: textTheme.displaySmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Offline-first expense splitting.',
+              textAlign: TextAlign.center,
+              style: textTheme.titleMedium?.copyWith(
+                color: colorScheme.onSurface.withOpacity(0.8),
+              ),
+            ),
+            const SizedBox(height: 24),
+            PrimaryButton(label: 'Start a Trip', onPressed: onStartTrip),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: onCreateSampleTrip,
+              child: const Text('Create sample trip'),
+            ),
+            const SizedBox(height: 24),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.center,
+              children: [
+                _ActionPill(
+                  label: 'History',
+                  icon: Icons.history,
+                  onPressed: onOpenHistory,
+                ),
+                _ActionPill(
+                  label: 'Settings',
+                  icon: Icons.settings,
+                  onPressed: onOpenSettings,
+                ),
+                _ActionPill(
+                  label: 'About',
+                  icon: Icons.info_outline,
+                  onPressed: onOpenAbout,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionPill extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  const _ActionPill({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18, color: colorScheme.secondary),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: colorScheme.onSurface,
+        side: BorderSide(color: colorScheme.secondary),
+        shape: const StadiumBorder(),
+      ),
+    );
+  }
+}

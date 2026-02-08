@@ -9,7 +9,10 @@ import '../../core/riverpod/expenses_provider.dart';
 import '../../core/riverpod/members_provider.dart';
 import '../../core/riverpod/trip_provider.dart';
 import '../../ui_components/primary_button.dart';
+import '../about/about_screen.dart';
+import '../home/empty_home_screen.dart';
 import '../history/trip_history_screen.dart';
+import '../settings/settings_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -73,7 +76,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         data: (trip) {
           if (trip == null) {
-            return _EmptyTripState(onCreateTrip: _showCreateTripDialog);
+            return EmptyHomeScreen(
+              onStartTrip: _showCreateTripDialog,
+              onOpenHistory: _openTripHistory,
+              onOpenSettings: _openSettings,
+              onOpenAbout: _openAbout,
+              onCreateSampleTrip: _createSampleTrip,
+            );
           }
 
           final memberMap = {
@@ -366,6 +375,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const TripHistoryScreen()),
     );
+  }
+
+  void _openSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+    );
+  }
+
+  void _openAbout() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AboutScreen()),
+    );
+  }
+
+  Future<void> _createSampleTrip() async {
+    await ref.read(tripControllerProvider.notifier).createSampleTrip();
+    await ref.read(membersControllerProvider.notifier).refresh();
+    await ref.read(expensesControllerProvider.notifier).refresh();
+    _showSnack('Sample trip created');
   }
 
   Future<void> _confirmCloseTrip(Trip trip) async {
@@ -772,33 +800,6 @@ class _BalancesList extends StatelessWidget {
             ),
           )
           .toList(),
-    );
-  }
-}
-
-class _EmptyTripState extends StatelessWidget {
-  final VoidCallback onCreateTrip;
-
-  const _EmptyTripState({required this.onCreateTrip});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Create your first trip to start splitting expenses offline.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 16),
-            PrimaryButton(label: 'Create Trip', onPressed: onCreateTrip),
-          ],
-        ),
-      ),
     );
   }
 }
