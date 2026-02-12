@@ -1,7 +1,7 @@
-# Phase 2 Implementation (Step 1) — Handshake Bootstrap
+# Phase 2 Implementation (Step 1-2) — Handshake Bootstrap + Native Nearby
 
 ## Overview
-Started Phase 2 with a modular handshake foundation for nearby device discovery and single-guest confirmation flow. This step establishes models, services, provider state management, and UI entry points while keeping data sync deferred to Phase 3.
+Started Phase 2 with a modular handshake foundation for nearby device discovery and single-guest confirmation flow. Then upgraded the internals to real Nearby Connections on Android while preserving provider/UI contracts. Data sync remains deferred to Phase 3.
 
 ## Implemented Scope
 - Locked Phase 2 decisions:
@@ -11,6 +11,9 @@ Started Phase 2 with a modular handshake foundation for nearby device discovery 
 - Added modular P2P and permissions services.
 - Added Riverpod connection provider for lifecycle state transitions.
 - Added connection feature screens and navigation entry from Settings.
+- Integrated `nearby_connections` into `P2PService` for advertise/discover/request/accept/reject/disconnect.
+- Integrated `permission_handler` in `PermissionsService` for runtime Bluetooth/location checks.
+- Added required Android manifest permissions for Nearby.
 
 ## Architecture Mapping
 ### Providers
@@ -21,9 +24,11 @@ Started Phase 2 with a modular handshake foundation for nearby device discovery 
 ### Services
 - `p2p_service.dart`
   - Encapsulates handshake operations and emits typed events.
-  - Includes mock bootstrap behavior for discovery/testing before native Nearby wiring.
+  - Uses native Nearby Connections API on Android.
+  - Enforces single-guest mode by rejecting additional requests when one endpoint is connected.
 - `permissions_service.dart`
-  - Centralizes permission checks and denial messages.
+  - Centralizes runtime permission checks and denial messaging.
+  - Verifies location service is enabled.
 
 ### Models
 - `connection_state.dart`
@@ -53,11 +58,15 @@ Started Phase 2 with a modular handshake foundation for nearby device discovery 
 - [lib/features/connection/guest_scan_screen.dart](lib/features/connection/guest_scan_screen.dart)
 - [lib/features/settings/settings_screen.dart](lib/features/settings/settings_screen.dart)
 - [docs/archi/phase2_spec.md](docs/archi/phase2_spec.md)
+- [android/app/src/main/AndroidManifest.xml](android/app/src/main/AndroidManifest.xml)
+- [pubspec.yaml](pubspec.yaml)
 
 ## Gotchas
-- This step uses a mock P2P bootstrap flow for UI/provider validation.
-- Native Nearby plugin integration is intentionally deferred to the next Phase 2 step.
-- Web path returns unsupported in permissions service.
+- Nearby handshake currently supports Android only in this phase.
+- Location service must be enabled for stable Nearby discovery/connection.
+- Confirmation dialogs are implemented at UI level for both Host and Guest flow.
 
 ## Next Step
-- Replace mock internals in `P2PService` with actual Nearby Connections integration and platform permission wiring, while keeping provider and UI APIs unchanged.
+- Improve endpoint-lost UX on Guest scan screen.
+- Persist minimal connection session metadata for diagnostics.
+- Start Phase 3 payload envelope and sync flow on top of established connection state/events.

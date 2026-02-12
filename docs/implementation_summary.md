@@ -60,3 +60,4 @@ Recent Updates (2026-02-08)
 Recent Updates (2026-02-12)
 - Started Phase 2 handshake bootstrap with modular connection models/services/provider.
 - Added Connect Devices flow (Host/Guest) with confirmation dialog and single-guest scope.
+- Wired native Nearby Connections + runtime permission handling for Android handshake.

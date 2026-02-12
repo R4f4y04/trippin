@@ -11,8 +11,8 @@ import '../utils/safe_execute.dart';
 
 final connectionControllerProvider =
     NotifierProvider<ConnectionController, ConnectionStateModel>(
-  ConnectionController.new,
-);
+      ConnectionController.new,
+    );
 
 class ConnectionController extends Notifier<ConnectionStateModel> {
   final PermissionsService _permissionsService = const PermissionsService();
@@ -177,10 +177,6 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
     );
   }
 
-  Future<void> simulateIncomingRequest() async {
-    await _p2pService.simulateIncomingRequest(guestName: 'Nearby Guest');
-  }
-
   void clearError() {
     state = state.copyWith(clearErrorMessage: true);
   }
@@ -219,7 +215,9 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
           break;
         }
         final devices = <DiscoveredDevice>[...state.discoveredDevices];
-        final index = devices.indexWhere((item) => item.endpointId == device.endpointId);
+        final index = devices.indexWhere(
+          (item) => item.endpointId == device.endpointId,
+        );
         if (index >= 0) {
           devices[index] = device;
         } else {
@@ -234,7 +232,8 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
         state = state.copyWith(
           status: ConnectionStatus.requestIncoming,
           selectedDevice: event.device,
-          statusMessage: 'Incoming request from ${event.device?.displayName ?? 'device'}.',
+          statusMessage:
+              'Incoming request from ${event.device?.displayName ?? 'device'}.',
         );
         break;
       case P2PEventType.connectionRequestSent:

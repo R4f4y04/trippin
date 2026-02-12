@@ -27,9 +27,9 @@ class _HostLobbyScreenState extends ConsumerState<HostLobbyScreen> {
   Future<void> _startHost() async {
     if (_started) return;
     _started = true;
-    await ref.read(connectionControllerProvider.notifier).startHost(
-          hostName: 'Trippin Host',
-        );
+    await ref
+        .read(connectionControllerProvider.notifier)
+        .startHost(hostName: 'Trippin Host');
   }
 
   @override
@@ -51,21 +51,12 @@ class _HostLobbyScreenState extends ConsumerState<HostLobbyScreen> {
         children: [
           _StatusCard(state: state),
           const SizedBox(height: 12),
-          if (state.status == ConnectionStatus.advertising ||
-              state.status == ConnectionStatus.requestIncoming)
-            PrimaryButton(
-              label: 'Simulate Guest Request',
-              onPressed: () => ref
-                  .read(connectionControllerProvider.notifier)
-                  .simulateIncomingRequest(),
-            ),
           if (state.status == ConnectionStatus.connected) ...[
             const SizedBox(height: 12),
             PrimaryButton(
               label: 'Disconnect Guest',
-              onPressed: () => ref
-                  .read(connectionControllerProvider.notifier)
-                  .disconnect(),
+              onPressed: () =>
+                  ref.read(connectionControllerProvider.notifier).disconnect(),
             ),
           ],
           const SizedBox(height: 12),
