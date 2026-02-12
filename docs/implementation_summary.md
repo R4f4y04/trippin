@@ -56,3 +56,7 @@ Recent Updates (2026-02-08)
 - Split the active trip UI into a dedicated feature folder and components.
 - Home screen now routes to the trip feature when a trip is active.
 - Trip history refreshes immediately after finishing a trip.
+
+Recent Updates (2026-02-12)
+- Started Phase 2 handshake bootstrap with modular connection models/services/provider.
+- Added Connect Devices flow (Host/Guest) with confirmation dialog and single-guest scope.

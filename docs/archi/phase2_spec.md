@@ -27,7 +27,7 @@ Phase 2 introduces offline peer discovery so nearby devices can find each other 
 - Guest displays a list of nearby lobbies with signal strength if available.
 
 ### Verification
-- Manual verification via a short PIN or a simple confirmation dialog (exact method to be finalized in Phase 2.1).
+- Manual verification uses a simple confirmation dialog on both devices.
 - Connection only finalizes after both devices confirm.
 
 ### Permissions
@@ -89,6 +89,9 @@ Follow three-tier pattern strictly:
   - guest_scan_screen.dart
 
 ## Open Questions
-- Verification method: PIN vs. confirm prompt?
-- Should we allow multiple Guests or just 1 for Phase 2?
+- Multi-guest support timing (deferred): this phase supports a single Guest only.
 - Should Host advertise trip name or device name by default?
+
+## Decisions (Locked for Phase 2)
+- Verification method: confirmation dialog.
+- Connection scope: single Guest only.
