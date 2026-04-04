@@ -1,4 +1,3 @@
-import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/expense.dart';
@@ -80,15 +79,15 @@ class StorageService {
 
   Future<Box<ExpenseRevision>> _openExpenseRevisionsBox() async {
     if (_expenseRevisionsBox?.isOpen ?? false) return _expenseRevisionsBox!;
-    _expenseRevisionsBox =
-        await Hive.openBox<ExpenseRevision>(_expenseRevisionsBoxName);
+    _expenseRevisionsBox = await Hive.openBox<ExpenseRevision>(
+      _expenseRevisionsBoxName,
+    );
     return _expenseRevisionsBox!;
   }
 
   Future<Box<TripHistoryEvent>> _openTripHistoryBox() async {
     if (_tripHistoryBox?.isOpen ?? false) return _tripHistoryBox!;
-    _tripHistoryBox =
-        await Hive.openBox<TripHistoryEvent>(_tripHistoryBoxName);
+    _tripHistoryBox = await Hive.openBox<TripHistoryEvent>(_tripHistoryBoxName);
     return _tripHistoryBox!;
   }
 
@@ -122,6 +121,11 @@ class StorageService {
   Future<List<Expense>> getExpensesByTrip(String tripId) async {
     final box = await _openExpensesBox();
     return box.values.where((expense) => expense.tripId == tripId).toList();
+  }
+
+  Future<Expense?> getExpense(String expenseId) async {
+    final box = await _openExpensesBox();
+    return box.get(expenseId);
   }
 
   Future<Trip> createTripWithOwner({
@@ -312,9 +316,7 @@ class StorageService {
 
   Future<List<TripHistoryEvent>> getTripHistory(String tripId) async {
     final box = await _openTripHistoryBox();
-    return box.values
-        .where((event) => event.tripId == tripId)
-        .toList()
+    return box.values.where((event) => event.tripId == tripId).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 

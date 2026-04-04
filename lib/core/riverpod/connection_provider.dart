@@ -6,6 +6,7 @@ import '../models/connection_state.dart';
 import '../models/discovered_device.dart';
 import '../services/p2p_service.dart';
 import '../services/permissions_service.dart';
+import '../services/sync_service.dart';
 import '../utils/app_logger.dart';
 import '../utils/safe_execute.dart';
 
@@ -17,6 +18,7 @@ final connectionControllerProvider =
 class ConnectionController extends Notifier<ConnectionStateModel> {
   final PermissionsService _permissionsService = const PermissionsService();
   final P2PService _p2pService = P2PService.instance;
+  final SyncService _syncService = SyncService.instance;
 
   StreamSubscription<P2PEvent>? _subscription;
 
@@ -25,6 +27,7 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
     _subscription = _p2pService.events.listen(_handleP2PEvent);
     ref.onDispose(() {
       _subscription?.cancel();
+      unawaited(_syncService.stop());
     });
     return const ConnectionStateModel.initial();
   }
@@ -98,6 +101,7 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
       activeConnectionId: null,
       statusMessage: 'Host stopped.',
     );
+    await _syncService.stop();
   }
 
   Future<void> startGuestScan() async {
@@ -199,6 +203,7 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
       clearSelectedDevice: true,
       statusMessage: 'Disconnected.',
     );
+    await _syncService.stop();
   }
 
   void clearError() {
@@ -303,6 +308,11 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
         );
         break;
       case P2PEventType.connectionAccepted:
+        _syncService.start(
+          role: state.role == ConnectionRole.host
+              ? SyncRole.host
+              : SyncRole.guest,
+        );
         state = state.copyWith(
           status: ConnectionStatus.connected,
           selectedDevice: event.device,
@@ -319,12 +329,16 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
         );
         break;
       case P2PEventType.disconnected:
+        unawaited(_syncService.stop());
         state = state.copyWith(
           status: ConnectionStatus.disconnected,
           activeConnectionId: null,
           clearSelectedDevice: true,
           statusMessage: 'Disconnected from peer.',
         );
+        break;
+      case P2PEventType.payloadReceived:
+      case P2PEventType.payloadSent:
         break;
       case P2PEventType.error:
         state = state.copyWith(

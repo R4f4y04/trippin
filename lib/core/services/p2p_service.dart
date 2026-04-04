@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:nearby_connections/nearby_connections.dart';
 
@@ -18,6 +20,8 @@ enum P2PEventType {
   connectionAccepted,
   connectionRejected,
   disconnected,
+  payloadReceived,
+  payloadSent,
   error,
 }
 
@@ -26,12 +30,14 @@ class P2PEvent {
   final DiscoveredDevice? device;
   final String? connectionId;
   final String? message;
+  final String? payload;
 
   const P2PEvent({
     required this.type,
     this.device,
     this.connectionId,
     this.message,
+    this.payload,
   });
 }
 
@@ -283,8 +289,8 @@ class P2PService {
             );
             await _nearby.acceptConnection(
               id,
-              onPayLoadRecieved: (_, __) {},
-              onPayloadTransferUpdate: (_, __) {},
+              onPayLoadRecieved: _handlePayloadReceived,
+              onPayloadTransferUpdate: (endpointId, update) {},
             );
           },
           onConnectionResult: (id, status) {
@@ -368,8 +374,8 @@ class P2PService {
     if (accept) {
       await _nearby.acceptConnection(
         endpointId,
-        onPayLoadRecieved: (_, __) {},
-        onPayloadTransferUpdate: (_, __) {},
+        onPayLoadRecieved: _handlePayloadReceived,
+        onPayloadTransferUpdate: (resolvedEndpointId, update) {},
       );
       AppLogger.info('P2P connection accepted');
       return;
@@ -385,6 +391,51 @@ class P2PService {
     _connectedEndpointId = null;
     _eventController.add(
       P2PEvent(type: P2PEventType.disconnected, connectionId: connectionId),
+    );
+  }
+
+  Future<void> sendTextPayload({
+    required String text,
+    String? connectionId,
+  }) async {
+    final endpointId = connectionId ?? _connectedEndpointId;
+    if (endpointId == null) {
+      _eventController.add(
+        const P2PEvent(
+          type: P2PEventType.error,
+          message: 'Cannot send payload without an active connection.',
+        ),
+      );
+      return;
+    }
+
+    await _nearby.sendBytesPayload(
+      endpointId,
+      Uint8List.fromList(utf8.encode(text)),
+    );
+
+    _eventController.add(
+      P2PEvent(
+        type: P2PEventType.payloadSent,
+        connectionId: endpointId,
+        payload: text,
+      ),
+    );
+  }
+
+  void _handlePayloadReceived(String endpointId, Payload payload) {
+    if (payload.type != PayloadType.BYTES) {
+      return;
+    }
+
+    final payloadBytes = payload.bytes ?? Uint8List(0);
+    final text = utf8.decode(payloadBytes, allowMalformed: true);
+    _eventController.add(
+      P2PEvent(
+        type: P2PEventType.payloadReceived,
+        connectionId: endpointId,
+        payload: text,
+      ),
     );
   }
 

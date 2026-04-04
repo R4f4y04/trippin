@@ -1,16 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/expense.dart';
+import '../models/connection_state.dart';
 import '../services/storage_service.dart';
+import '../services/sync_service.dart';
+import '../utils/app_logger.dart';
+import 'connection_provider.dart';
 import 'trip_provider.dart';
 
 final expensesControllerProvider =
     AsyncNotifierProvider<ExpensesController, List<Expense>>(
-  ExpensesController.new,
-);
+      ExpensesController.new,
+    );
 
 class ExpensesController extends AsyncNotifier<List<Expense>> {
   final _storage = StorageService.instance;
+  final _syncService = SyncService.instance;
 
   @override
   Future<List<Expense>> build() async {
@@ -27,7 +32,7 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
     required String name,
     String? note,
   }) async {
-    await _storage.addExpense(
+    final savedExpense = await _storage.addExpense(
       tripId: tripId,
       payerId: payerId,
       amount: amount,
@@ -35,6 +40,8 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
       name: name,
       note: note,
     );
+
+    await _syncAfterLocalMutation(tripId: tripId, createdExpense: savedExpense);
     await refresh();
   }
 
@@ -54,12 +61,45 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
       beneficiaryIds: beneficiaryIds,
       note: note,
     );
+    final expense = await _storage.getExpense(expenseId);
+    await _syncAfterLocalMutation(tripId: expense?.tripId);
     await refresh();
   }
 
   Future<void> deleteExpense({required String expenseId}) async {
+    final existing = await _storage.getExpense(expenseId);
     await _storage.deleteExpense(expenseId: expenseId);
+    await _syncAfterLocalMutation(tripId: existing?.tripId);
     await refresh();
+  }
+
+  Future<void> _syncAfterLocalMutation({
+    required String? tripId,
+    Expense? createdExpense,
+  }) async {
+    if (tripId == null) return;
+
+    final connectionState = ref.read(connectionControllerProvider);
+    final isConnected =
+        connectionState.status == ConnectionStatus.connected &&
+        connectionState.activeConnectionId != null;
+    if (!isConnected) return;
+
+    if (connectionState.role == ConnectionRole.guest &&
+        createdExpense != null) {
+      await _syncService.sendAddExpense(
+        tripId: tripId,
+        expense: createdExpense,
+      );
+      AppLogger.info('Guest sent ADD_EXPENSE for trip $tripId.');
+      return;
+    }
+
+    if (connectionState.role == ConnectionRole.host) {
+      final expenses = await _storage.getExpensesByTrip(tripId);
+      await _syncService.sendSyncLedger(tripId: tripId, expenses: expenses);
+      AppLogger.info('Host broadcasted SYNC_LEDGER for trip $tripId.');
+    }
   }
 
   Future<void> refresh() async {

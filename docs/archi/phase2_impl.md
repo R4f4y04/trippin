@@ -80,4 +80,6 @@ Started Phase 2 with a modular handshake foundation for nearby device discovery 
 ## Next Step
 - Improve endpoint-lost UX on Guest scan screen.
 - Persist minimal connection session metadata for diagnostics.
-- Start Phase 3 payload envelope and sync flow on top of established connection state/events.
+- Phase 3 started: payload envelope contracts and sync service scaffolding are documented in:
+  - [docs/archi/phase3_spec.md](docs/archi/phase3_spec.md)
+  - [docs/archi/phase3_impl.md](docs/archi/phase3_impl.md)
