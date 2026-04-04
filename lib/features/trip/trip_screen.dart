@@ -5,6 +5,7 @@ import '../../core/models/expense.dart';
 import '../../core/models/trip.dart';
 import '../../core/models/user.dart';
 import '../../core/riverpod/balances_provider.dart';
+import '../../core/riverpod/expense_sync_status_provider.dart';
 import '../../core/riverpod/expenses_provider.dart';
 import '../../core/riverpod/members_provider.dart';
 import '../../core/riverpod/trip_list_provider.dart';
@@ -32,22 +33,17 @@ class _TripScreenState extends ConsumerState<TripScreen> {
     final membersAsync = ref.watch(membersControllerProvider);
     final expensesAsync = ref.watch(expensesControllerProvider);
     final balances = ref.watch(balancesProvider);
+    final syncStatuses = ref.watch(expenseSyncStatusProvider);
 
     return tripAsync.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (error, _) => Scaffold(
-        body: ErrorState(
-          message: 'Failed to load trip',
-          onRetry: _refreshAll,
-        ),
+        body: ErrorState(message: 'Failed to load trip', onRetry: _refreshAll),
       ),
       data: (trip) {
         if (trip == null) {
-          return const Scaffold(
-            body: Center(child: Text('No active trip')),
-          );
+          return const Scaffold(body: Center(child: Text('No active trip')));
         }
 
         if (membersAsync.hasError || expensesAsync.hasError) {
@@ -91,10 +87,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                         ClosedBanner(onReopen: () => _confirmReopenTrip(trip)),
                         const SizedBox(height: 12),
                       ],
-                      TripSummaryCard(
-                        trip: trip,
-                        memberCount: members.length,
-                      ),
+                      TripSummaryCard(trip: trip, memberCount: members.length),
                       const SizedBox(height: 12),
                       SectionCard(
                         title: 'Members',
@@ -122,8 +115,12 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                               expenses: expenses,
                               memberMap: memberMap,
                               isReadOnly: isClosed,
-                              onEdit: (expense) =>
-                                  _showEditExpenseDialog(trip, members, expense),
+                              syncStatuses: syncStatuses,
+                              onEdit: (expense) => _showEditExpenseDialog(
+                                trip,
+                                members,
+                                expense,
+                              ),
                               onDelete: _confirmDeleteExpense,
                             ),
                             const SizedBox(height: 12),
@@ -220,7 +217,9 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                     }
                   }
                   if (mounted) {
-                    _showSnack(success ? 'Member added' : 'Failed to add member');
+                    _showSnack(
+                      success ? 'Member added' : 'Failed to add member',
+                    );
                   }
                 },
               ),
@@ -256,13 +255,16 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                 children: [
                   TextField(
                     controller: nameController,
-                    decoration: const InputDecoration(labelText: 'Expense Name'),
+                    decoration: const InputDecoration(
+                      labelText: 'Expense Name',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: amountController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(labelText: 'Amount'),
                   ),
                   const SizedBox(height: 12),
@@ -306,7 +308,9 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: noteController,
-                    decoration: const InputDecoration(labelText: 'Note (Optional)'),
+                    decoration: const InputDecoration(
+                      labelText: 'Note (Optional)',
+                    ),
                   ),
                 ],
               ),
@@ -336,7 +340,9 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                     return;
                   }
                   setState(() => isSaving = true);
-                  await ref.read(expensesControllerProvider.notifier).addExpense(
+                  await ref
+                      .read(expensesControllerProvider.notifier)
+                      .addExpense(
                         tripId: trip.id,
                         payerId: payerId!,
                         amount: amount,
@@ -418,8 +424,9 @@ class _TripScreenState extends ConsumerState<TripScreen> {
     Expense expense,
   ) async {
     final nameController = TextEditingController(text: expense.name);
-    final amountController =
-        TextEditingController(text: expense.amount.toString());
+    final amountController = TextEditingController(
+      text: expense.amount.toString(),
+    );
     final noteController = TextEditingController(text: expense.note ?? '');
     String? payerId = expense.payerId;
     final selectedBeneficiaries = <String>{...expense.beneficiaryIds};
@@ -437,13 +444,16 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                 children: [
                   TextField(
                     controller: nameController,
-                    decoration: const InputDecoration(labelText: 'Expense Name'),
+                    decoration: const InputDecoration(
+                      labelText: 'Expense Name',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: amountController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(labelText: 'Amount'),
                   ),
                   const SizedBox(height: 12),
@@ -487,7 +497,9 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: noteController,
-                    decoration: const InputDecoration(labelText: 'Note (Optional)'),
+                    decoration: const InputDecoration(
+                      labelText: 'Note (Optional)',
+                    ),
                   ),
                 ],
               ),
@@ -517,7 +529,9 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                     return;
                   }
                   setState(() => isSaving = true);
-                  await ref.read(expensesControllerProvider.notifier).updateExpense(
+                  await ref
+                      .read(expensesControllerProvider.notifier)
+                      .updateExpense(
                         expenseId: expense.id,
                         name: expenseName,
                         amount: amount,
@@ -568,8 +582,8 @@ class _TripScreenState extends ConsumerState<TripScreen> {
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }

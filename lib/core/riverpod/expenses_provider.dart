@@ -6,6 +6,7 @@ import '../services/storage_service.dart';
 import '../services/sync_service.dart';
 import '../utils/app_logger.dart';
 import 'connection_provider.dart';
+import 'expense_sync_status_provider.dart';
 import 'trip_provider.dart';
 
 final expensesControllerProvider =
@@ -86,6 +87,9 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
     if (!isConnected) {
       if (connectionState.role == ConnectionRole.guest &&
           createdExpense != null) {
+        ref
+            .read(expenseSyncStatusProvider.notifier)
+            .markRetrying(createdExpense.id);
         await _syncService.queueAddExpense(
           tripId: tripId,
           expense: createdExpense,
@@ -97,6 +101,9 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
 
     if (connectionState.role == ConnectionRole.guest &&
         createdExpense != null) {
+      ref
+          .read(expenseSyncStatusProvider.notifier)
+          .markPending(createdExpense.id);
       await _syncService.sendAddExpense(
         tripId: tripId,
         expense: createdExpense,
@@ -113,6 +120,7 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
   }
 
   Future<void> refresh() async {
+    ref.read(expenseSyncStatusProvider.notifier).clearSynced();
     state = const AsyncLoading();
     final trip = await ref.read(tripControllerProvider.future);
     if (trip == null) {

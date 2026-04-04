@@ -99,15 +99,30 @@ Still deferred from this step:
 - Backoff/retry scheduling strategy beyond reconnect-triggered flush.
 
 ### Step 5: Provider/UI Wiring + Validation
-Status: Not Started
+Status: In Progress
 
 Planned:
 - Provider integration for sync-aware write paths.
 - Pending/synced/retrying indicators.
 - Two-device validation script and logs.
 
+Implemented:
+- Added `expense_sync_status_provider.dart` to track per-expense sync state in Riverpod (pending/retrying/synced).
+- Integrated status transitions into `ExpensesController`:
+  - guest connected add -> `pending`
+  - guest disconnected add -> queued + `retrying`
+- Integrated status transitions into `ConnectionController` sync event handling:
+  - host merge + guest ledger apply -> mark related expense IDs as `synced`
+- Added sync badges in trip expenses UI:
+  - `ExpensesList` now renders compact status chips (Pending/Retrying/Synced)
+  - `TripScreen` passes sync-status map into `ExpensesList`
+
+Pending in this step:
+- Run two-device manual validation and capture evidence logs.
+
 ## Validation Log
 - `dart analyze` on changed Phase 3 files: no issues found.
 - `flutter analyze` project-wide: no new errors from this increment; existing baseline warnings/infos remain in unrelated files.
 - `dart analyze` after Step 3 inbound handling: no issues found.
 - `dart analyze` after Step 4 queue + flush wiring: no issues found.
+- `dart analyze` after Step 5 status provider + UI badges: no issues found.

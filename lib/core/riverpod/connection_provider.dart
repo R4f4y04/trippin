@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/connection_state.dart';
 import '../models/discovered_device.dart';
+import '../models/sync_envelope.dart';
 import '../models/sync_payloads.dart';
 import 'expenses_provider.dart';
+import 'expense_sync_status_provider.dart';
 import '../services/p2p_service.dart';
 import '../services/permissions_service.dart';
 import '../services/storage_service.dart';
@@ -362,7 +364,25 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
   void _handleSyncEvent(SyncEvent event) {
     switch (event.type) {
       case SyncEventType.expenseMergedOnHost:
+        final hostEnvelope = event.envelope;
+        if (hostEnvelope != null &&
+            hostEnvelope.type == SyncMessageType.addExpense) {
+          final payload = AddExpensePayload.fromJson(hostEnvelope.payload);
+          ref
+              .read(expenseSyncStatusProvider.notifier)
+              .markSynced(payload.expense.id);
+        }
+        unawaited(ref.read(expensesControllerProvider.notifier).refresh());
+        break;
       case SyncEventType.ledgerAppliedOnGuest:
+        final guestEnvelope = event.envelope;
+        if (guestEnvelope != null &&
+            guestEnvelope.type == SyncMessageType.syncLedger) {
+          final payload = SyncLedgerPayload.fromJson(guestEnvelope.payload);
+          ref
+              .read(expenseSyncStatusProvider.notifier)
+              .markManySynced(payload.expenses.map((item) => item.id));
+        }
         unawaited(ref.read(expensesControllerProvider.notifier).refresh());
         break;
       case SyncEventType.envelopeReceived:

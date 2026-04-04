@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/models/expense.dart';
+import '../../../core/riverpod/expense_sync_status_provider.dart';
 
 class ExpensesList extends StatelessWidget {
   final List<Expense> expenses;
   final Map<String, String> memberMap;
   final bool isReadOnly;
+  final Map<String, ExpenseSyncStatus> syncStatuses;
   final ValueChanged<Expense> onEdit;
   final ValueChanged<Expense> onDelete;
 
@@ -14,6 +16,7 @@ class ExpensesList extends StatelessWidget {
     required this.expenses,
     required this.memberMap,
     required this.isReadOnly,
+    required this.syncStatuses,
     required this.onEdit,
     required this.onDelete,
   });
@@ -31,6 +34,7 @@ class ExpensesList extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               title: Text(expense.name),
+              leading: _buildStatusChip(syncStatuses[expense.id]),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -56,5 +60,29 @@ class ExpensesList extends StatelessWidget {
           )
           .toList(),
     );
+  }
+
+  Widget? _buildStatusChip(ExpenseSyncStatus? status) {
+    if (status == null) {
+      return null;
+    }
+
+    switch (status) {
+      case ExpenseSyncStatus.pending:
+        return const Chip(
+          label: Text('Pending'),
+          visualDensity: VisualDensity.compact,
+        );
+      case ExpenseSyncStatus.retrying:
+        return const Chip(
+          label: Text('Retrying'),
+          visualDensity: VisualDensity.compact,
+        );
+      case ExpenseSyncStatus.synced:
+        return const Chip(
+          label: Text('Synced'),
+          visualDensity: VisualDensity.compact,
+        );
+    }
   }
 }
