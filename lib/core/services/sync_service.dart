@@ -5,10 +5,17 @@ import '../models/sync_envelope.dart';
 import '../models/sync_payloads.dart';
 import '../utils/app_logger.dart';
 import 'p2p_service.dart';
+import 'storage_service.dart';
 
 enum SyncRole { host, guest }
 
-enum SyncEventType { envelopeReceived, envelopeSent, invalidEnvelope }
+enum SyncEventType {
+  envelopeReceived,
+  envelopeSent,
+  invalidEnvelope,
+  expenseMergedOnHost,
+  ledgerAppliedOnGuest,
+}
 
 class SyncEvent {
   final SyncEventType type;
@@ -24,14 +31,17 @@ class SyncService {
   static final SyncService instance = SyncService._();
 
   final P2PService _p2pService = P2PService.instance;
+  final StorageService _storage = StorageService.instance;
   final StreamController<SyncEvent> _eventController =
       StreamController<SyncEvent>.broadcast();
 
   StreamSubscription<P2PEvent>? _p2pSubscription;
+  SyncRole? _role;
 
   Stream<SyncEvent> get events => _eventController.stream;
 
   void start({required SyncRole role}) {
+    _role = role;
     _p2pSubscription ??= _p2pService.events.listen(_handleP2PEvent);
     AppLogger.info('Sync service started as ${role.name}.');
   }
@@ -39,6 +49,7 @@ class SyncService {
   Future<void> stop() async {
     await _p2pSubscription?.cancel();
     _p2pSubscription = null;
+    _role = null;
     AppLogger.info('Sync service stopped.');
   }
 
@@ -90,7 +101,7 @@ class SyncService {
     );
   }
 
-  void _handleP2PEvent(P2PEvent event) {
+  Future<void> _handleP2PEvent(P2PEvent event) async {
     if (event.type != P2PEventType.payloadReceived) {
       return;
     }
@@ -121,6 +132,38 @@ class SyncService {
     _eventController.add(
       SyncEvent(type: SyncEventType.envelopeReceived, envelope: envelope),
     );
+
+    await _applyIncomingEnvelope(envelope);
+  }
+
+  Future<void> _applyIncomingEnvelope(SyncEnvelope envelope) async {
+    final role = _role;
+    if (role == null) {
+      return;
+    }
+
+    if (role == SyncRole.host && envelope.type == SyncMessageType.addExpense) {
+      final payload = AddExpensePayload.fromJson(envelope.payload);
+      await _storage.mergeSyncedExpense(expense: payload.expense);
+      final ledger = await _storage.getExpensesByTrip(payload.tripId);
+      await sendSyncLedger(tripId: payload.tripId, expenses: ledger);
+      _eventController.add(
+        SyncEvent(type: SyncEventType.expenseMergedOnHost, envelope: envelope),
+      );
+      return;
+    }
+
+    if (role == SyncRole.guest && envelope.type == SyncMessageType.syncLedger) {
+      final payload = SyncLedgerPayload.fromJson(envelope.payload);
+      await _storage.replaceTripExpensesFromSync(
+        tripId: payload.tripId,
+        expenses: payload.expenses,
+      );
+      _eventController.add(
+        SyncEvent(type: SyncEventType.ledgerAppliedOnGuest, envelope: envelope),
+      );
+      return;
+    }
   }
 
   Future<void> dispose() async {

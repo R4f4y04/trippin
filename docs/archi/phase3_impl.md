@@ -52,7 +52,7 @@ Notes:
 - Role-based business routing (Host apply + Guest reconcile) is implemented in Step 3.
 
 ### Step 3: Host/Guest Ledger Loop
-Status: In Progress
+Status: Complete (Baseline)
 
 Planned:
 - Host: local write -> broadcast canonical `SYNC_LEDGER`.
@@ -64,10 +64,15 @@ Implemented (initial wiring):
 - Guest behavior now sends `ADD_EXPENSE` after local add when connected.
 - Added `StorageService.getExpense` helper for update/delete mutation sync routing.
 
-Pending in this step:
-- Handle incoming `ADD_EXPENSE` on Host to write canonical ledger.
-- Handle incoming `SYNC_LEDGER` on Guest to reconcile and refresh providers.
-- Add pending/synced state markers for guest-created expenses.
+Implemented (inbound handling):
+- `SyncService` now applies inbound envelopes by role:
+  - Host receives `ADD_EXPENSE` -> merges expense into storage -> emits canonical `SYNC_LEDGER`.
+  - Guest receives `SYNC_LEDGER` -> replaces trip expense set from host ledger.
+- `ConnectionController` now listens to `SyncService` events and triggers expense provider refresh when inbound sync mutations are applied.
+- Guest now sends `HANDSHAKE` payload immediately after connection is accepted with device owner + managed member IDs.
+
+Still deferred from this step:
+- Add pending/synced visual markers for guest-created expenses.
 
 ### Step 4: Queue + Reconnection Flush
 Status: Not Started
@@ -87,3 +92,4 @@ Planned:
 ## Validation Log
 - `dart analyze` on changed Phase 3 files: no issues found.
 - `flutter analyze` project-wide: no new errors from this increment; existing baseline warnings/infos remain in unrelated files.
+- `dart analyze` after Step 3 inbound handling: no issues found.

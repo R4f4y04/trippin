@@ -4,8 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/connection_state.dart';
 import '../models/discovered_device.dart';
+import '../models/sync_payloads.dart';
+import 'expenses_provider.dart';
 import '../services/p2p_service.dart';
 import '../services/permissions_service.dart';
+import '../services/storage_service.dart';
 import '../services/sync_service.dart';
 import '../utils/app_logger.dart';
 import '../utils/safe_execute.dart';
@@ -19,14 +22,18 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
   final PermissionsService _permissionsService = const PermissionsService();
   final P2PService _p2pService = P2PService.instance;
   final SyncService _syncService = SyncService.instance;
+  final StorageService _storageService = StorageService.instance;
 
   StreamSubscription<P2PEvent>? _subscription;
+  StreamSubscription<SyncEvent>? _syncSubscription;
 
   @override
   ConnectionStateModel build() {
     _subscription = _p2pService.events.listen(_handleP2PEvent);
+    _syncSubscription = _syncService.events.listen(_handleSyncEvent);
     ref.onDispose(() {
       _subscription?.cancel();
+      _syncSubscription?.cancel();
       unawaited(_syncService.stop());
     });
     return const ConnectionStateModel.initial();
@@ -313,6 +320,9 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
               ? SyncRole.host
               : SyncRole.guest,
         );
+        if (state.role == ConnectionRole.guest) {
+          unawaited(_sendGuestHandshake());
+        }
         state = state.copyWith(
           status: ConnectionStatus.connected,
           selectedDevice: event.device,
@@ -347,5 +357,39 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
         );
         break;
     }
+  }
+
+  void _handleSyncEvent(SyncEvent event) {
+    switch (event.type) {
+      case SyncEventType.expenseMergedOnHost:
+      case SyncEventType.ledgerAppliedOnGuest:
+        unawaited(ref.read(expensesControllerProvider.notifier).refresh());
+        break;
+      case SyncEventType.envelopeReceived:
+      case SyncEventType.envelopeSent:
+      case SyncEventType.invalidEnvelope:
+        break;
+    }
+  }
+
+  Future<void> _sendGuestHandshake() async {
+    final owner = await _storageService.getDeviceOwner();
+    final trip = await _storageService.getActiveTrip();
+    if (owner == null || trip == null) {
+      return;
+    }
+
+    final members = await _storageService.getUsersByIds(trip.memberIds);
+    final managedMemberIds = members
+        .where((user) => user.managedBy == owner.id)
+        .map((user) => user.id)
+        .toList();
+
+    final payload = HandshakePayload(
+      deviceId: owner.id,
+      deviceName: owner.name,
+      managedMemberIds: managedMemberIds,
+    );
+    await _syncService.sendHandshake(payload);
   }
 }

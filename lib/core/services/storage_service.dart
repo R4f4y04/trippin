@@ -309,6 +309,72 @@ class StorageService {
     return expense;
   }
 
+  Future<void> mergeSyncedExpense({required Expense expense}) async {
+    final trip = await getTrip(expense.tripId);
+    if (trip == null) {
+      AppLogger.warning('Received synced expense for missing trip.');
+      return;
+    }
+
+    final expensesBox = await _openExpensesBox();
+    final tripsBox = await _openTripsBox();
+    final alreadyExists = expensesBox.containsKey(expense.id);
+
+    final nextExpenseIds = alreadyExists
+        ? trip.expenseIds
+        : [...trip.expenseIds, expense.id];
+    final updatedTrip = trip.copyWith(
+      expenseIds: nextExpenseIds,
+      lastModifiedAt: DateTime.now(),
+    );
+
+    await safeExecute(
+      operation: () async {
+        await expensesBox.put(expense.id, expense);
+        await tripsBox.put(updatedTrip.id, updatedTrip);
+      },
+      onError: (error, stackTrace) {
+        AppLogger.error('Failed to merge synced expense', error, stackTrace);
+      },
+    );
+  }
+
+  Future<void> replaceTripExpensesFromSync({
+    required String tripId,
+    required List<Expense> expenses,
+  }) async {
+    final trip = await getTrip(tripId);
+    if (trip == null) {
+      AppLogger.warning('Received synced ledger for missing trip.');
+      return;
+    }
+
+    final expensesBox = await _openExpensesBox();
+    final tripsBox = await _openTripsBox();
+
+    await safeExecute(
+      operation: () async {
+        final existing = await getExpensesByTrip(tripId);
+        for (final expense in existing) {
+          await expensesBox.delete(expense.id);
+        }
+
+        for (final expense in expenses) {
+          await expensesBox.put(expense.id, expense);
+        }
+
+        final updatedTrip = trip.copyWith(
+          expenseIds: expenses.map((item) => item.id).toList(),
+          lastModifiedAt: DateTime.now(),
+        );
+        await tripsBox.put(updatedTrip.id, updatedTrip);
+      },
+      onError: (error, stackTrace) {
+        AppLogger.error('Failed to apply synced ledger', error, stackTrace);
+      },
+    );
+  }
+
   Future<Trip?> getTrip(String id) async {
     final box = await _openTripsBox();
     return box.get(id);
