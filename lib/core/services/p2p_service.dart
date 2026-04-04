@@ -12,6 +12,7 @@ enum P2PEventType {
   advertisingStarted,
   advertisingStopped,
   deviceFound,
+  deviceLost,
   connectionRequested,
   connectionRequestSent,
   connectionAccepted,
@@ -44,6 +45,7 @@ class P2PService {
   final Nearby _nearby = Nearby();
   final Map<String, DiscoveredDevice> _knownDevices = {};
   static const String _serviceId = 'com.example.trippin.handshake';
+  static const Duration _nearbyTimeout = Duration(seconds: 12);
 
   Stream<P2PEvent> get events => _eventController.stream;
 
@@ -65,10 +67,21 @@ class P2PService {
     AppLogger.info('P2P start advertising: $hostName');
     await stopAdvertising();
 
-    final started = await _nearby.startAdvertising(
+    _isAdvertising = true;
+    _eventController.add(
+      const P2PEvent(
+        type: P2PEventType.advertisingStarted,
+        message: 'Lobby starting...',
+      ),
+    );
+
+    final startFuture = _nearby.startAdvertising(
       hostName,
       Strategy.P2P_STAR,
       onConnectionInitiated: (id, info) async {
+        AppLogger.info(
+          'P2P onConnectionInitiated (host): $id ${info.endpointName}',
+        );
         final device = DiscoveredDevice.create(
           endpointId: id,
           displayName: info.endpointName,
@@ -92,6 +105,7 @@ class P2PService {
         );
       },
       onConnectionResult: (id, status) {
+        AppLogger.info('P2P onConnectionResult (host): $id $status');
         final device = _knownDevices[id];
         if (status == Status.CONNECTED) {
           _connectedEndpointId = id;
@@ -120,6 +134,7 @@ class P2PService {
         );
       },
       onDisconnected: (id) {
+        AppLogger.info('P2P onDisconnected (host): $id');
         _connectedEndpointId = null;
         _eventController.add(
           P2PEvent(
@@ -132,22 +147,46 @@ class P2PService {
       serviceId: _serviceId,
     );
 
-    if (!started) {
-      _eventController.add(
-        const P2PEvent(
-          type: P2PEventType.error,
-          message: 'Failed to start advertising.',
-        ),
-      );
-      return;
-    }
+    unawaited(
+      startFuture
+          .timeout(_nearbyTimeout)
+          .then((started) {
+            AppLogger.info('P2P advertising started result: $started');
+            if (started) {
+              _eventController.add(
+                const P2PEvent(
+                  type: P2PEventType.advertisingStarted,
+                  message: 'Lobby started',
+                ),
+              );
+              return;
+            }
 
-    _isAdvertising = true;
-    _eventController.add(
-      const P2PEvent(
-        type: P2PEventType.advertisingStarted,
-        message: 'Lobby started',
-      ),
+            _isAdvertising = false;
+            _eventController.add(
+              const P2PEvent(
+                type: P2PEventType.error,
+                message: 'Failed to start advertising.',
+              ),
+            );
+          })
+          .catchError((error, stackTrace) {
+            if (error is TimeoutException) {
+              AppLogger.warning(
+                'P2P start advertising timed out. Keeping lobby active and waiting for callbacks.',
+              );
+              return;
+            }
+
+            _isAdvertising = false;
+            AppLogger.error('P2P start advertising failed', error, stackTrace);
+            _eventController.add(
+              P2PEvent(
+                type: P2PEventType.error,
+                message: 'Failed to start advertising: $error',
+              ),
+            );
+          }),
     );
   }
 
@@ -178,28 +217,37 @@ class P2PService {
     AppLogger.info('P2P start discovery');
     await stopDiscovery();
 
-    final started = await _nearby.startDiscovery(
-      'Trippin Guest',
-      Strategy.P2P_STAR,
-      onEndpointFound: (id, userName, serviceId) {
-        if (serviceId != _serviceId) {
-          return;
-        }
+    final started = await _nearby
+        .startDiscovery(
+          'Trippin Guest',
+          Strategy.P2P_STAR,
+          onEndpointFound: (id, userName, serviceId) {
+            AppLogger.info('P2P onEndpointFound: $id $userName $serviceId');
+            if (serviceId != _serviceId) {
+              return;
+            }
 
-        final device = DiscoveredDevice.create(
-          endpointId: id,
-          displayName: userName,
-        );
-        _knownDevices[id] = device;
-        _eventController.add(
-          P2PEvent(type: P2PEventType.deviceFound, device: device),
-        );
-      },
-      onEndpointLost: (id) {
-        _knownDevices.remove(id);
-      },
-      serviceId: _serviceId,
-    );
+            final device = DiscoveredDevice.create(
+              endpointId: id,
+              displayName: userName,
+            );
+            _knownDevices[id] = device;
+            _eventController.add(
+              P2PEvent(type: P2PEventType.deviceFound, device: device),
+            );
+          },
+          onEndpointLost: (id) {
+            AppLogger.info('P2P onEndpointLost: $id');
+            final lost = _knownDevices.remove(id);
+            _eventController.add(
+              P2PEvent(type: P2PEventType.deviceLost, device: lost),
+            );
+          },
+          serviceId: _serviceId,
+        )
+        .timeout(_nearbyTimeout);
+
+    AppLogger.info('P2P discovery started result: $started');
 
     if (!started) {
       _eventController.add(
@@ -225,57 +273,66 @@ class P2PService {
 
   Future<void> requestConnection(DiscoveredDevice device) async {
     AppLogger.info('P2P request connection to ${device.displayName}');
-    final sent = await _nearby.requestConnection(
-      'Trippin Guest',
-      device.endpointId,
-      onConnectionInitiated: (id, info) async {
-        await _nearby.acceptConnection(
-          id,
-          onPayLoadRecieved: (_, __) {},
-          onPayloadTransferUpdate: (_, __) {},
-        );
-      },
-      onConnectionResult: (id, status) {
-        if (status == Status.CONNECTED) {
-          _connectedEndpointId = id;
-          _eventController.add(
-            P2PEvent(
-              type: P2PEventType.connectionAccepted,
-              device: _knownDevices[id] ?? device,
-              connectionId: id,
-            ),
-          );
-          return;
-        }
+    final sent = await _nearby
+        .requestConnection(
+          'Trippin Guest',
+          device.endpointId,
+          onConnectionInitiated: (id, info) async {
+            AppLogger.info(
+              'P2P onConnectionInitiated (guest): $id ${info.endpointName}',
+            );
+            await _nearby.acceptConnection(
+              id,
+              onPayLoadRecieved: (_, __) {},
+              onPayloadTransferUpdate: (_, __) {},
+            );
+          },
+          onConnectionResult: (id, status) {
+            AppLogger.info('P2P onConnectionResult (guest): $id $status');
+            if (status == Status.CONNECTED) {
+              _connectedEndpointId = id;
+              _eventController.add(
+                P2PEvent(
+                  type: P2PEventType.connectionAccepted,
+                  device: _knownDevices[id] ?? device,
+                  connectionId: id,
+                ),
+              );
+              return;
+            }
 
-        if (status == Status.REJECTED) {
-          _eventController.add(
-            P2PEvent(
-              type: P2PEventType.connectionRejected,
-              device: _knownDevices[id] ?? device,
-            ),
-          );
-          return;
-        }
+            if (status == Status.REJECTED) {
+              _eventController.add(
+                P2PEvent(
+                  type: P2PEventType.connectionRejected,
+                  device: _knownDevices[id] ?? device,
+                ),
+              );
+              return;
+            }
 
-        _eventController.add(
-          const P2PEvent(
-            type: P2PEventType.error,
-            message: 'Connection failed while requesting host.',
-          ),
-        );
-      },
-      onDisconnected: (id) {
-        _connectedEndpointId = null;
-        _eventController.add(
-          P2PEvent(
-            type: P2PEventType.disconnected,
-            connectionId: id,
-            device: _knownDevices[id] ?? device,
-          ),
-        );
-      },
-    );
+            _eventController.add(
+              const P2PEvent(
+                type: P2PEventType.error,
+                message: 'Connection failed while requesting host.',
+              ),
+            );
+          },
+          onDisconnected: (id) {
+            AppLogger.info('P2P onDisconnected (guest): $id');
+            _connectedEndpointId = null;
+            _eventController.add(
+              P2PEvent(
+                type: P2PEventType.disconnected,
+                connectionId: id,
+                device: _knownDevices[id] ?? device,
+              ),
+            );
+          },
+        )
+        .timeout(_nearbyTimeout);
+
+    AppLogger.info('P2P requestConnection result: $sent');
 
     if (!sent) {
       _eventController.add(

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -14,6 +15,10 @@ class PermissionStatusResult {
 
 class PermissionsService {
   const PermissionsService();
+
+  Future<bool> openAppPermissionSettings() async {
+    return openAppSettings();
+  }
 
   Future<PermissionStatusResult> ensureNearbyPermissions() async {
     AppLogger.info('Checking nearby permissions');
@@ -32,13 +37,22 @@ class PermissionsService {
       );
     }
 
-    final permissions = <Permission>[
-      Permission.locationWhenInUse,
-      Permission.bluetoothScan,
-      Permission.bluetoothConnect,
-      Permission.bluetoothAdvertise,
-      Permission.nearbyWifiDevices,
-    ];
+    final sdkInt = await _androidSdkInt();
+    AppLogger.info('Android SDK: $sdkInt');
+
+    final permissions = <Permission>[Permission.locationWhenInUse];
+
+    if (sdkInt >= 31) {
+      permissions.addAll([
+        Permission.bluetoothScan,
+        Permission.bluetoothConnect,
+        Permission.bluetoothAdvertise,
+      ]);
+    }
+
+    if (sdkInt >= 33) {
+      permissions.add(Permission.nearbyWifiDevices);
+    }
 
     final statuses = await permissions.request();
 
@@ -46,6 +60,10 @@ class PermissionsService {
         .where((entry) => !entry.value.isGranted)
         .map((entry) => entry.key)
         .toList();
+
+    AppLogger.info(
+      'Denied permissions: ${denied.map((permission) => permission.toString()).join(', ')}',
+    );
 
     if (denied.isNotEmpty) {
       final hasPermanentDenial = statuses.values.any(
@@ -71,5 +89,10 @@ class PermissionsService {
       isGranted: true,
       message: 'Nearby permissions granted.',
     );
+  }
+
+  Future<int> _androidSdkInt() async {
+    final info = await DeviceInfoPlugin().androidInfo;
+    return info.version.sdkInt;
   }
 }

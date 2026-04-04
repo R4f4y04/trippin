@@ -60,6 +60,30 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
     );
   }
 
+  Future<bool> requestPermissionsOnly() async {
+    state = state.copyWith(
+      status: ConnectionStatus.checkingPermissions,
+      clearErrorMessage: true,
+      statusMessage: 'Requesting permissions...',
+    );
+
+    final permission = await _permissionsService.ensureNearbyPermissions();
+    if (!permission.isGranted) {
+      state = state.copyWith(
+        status: ConnectionStatus.permissionDenied,
+        errorMessage: permission.message ?? 'Permissions are required.',
+      );
+      return false;
+    }
+
+    state = state.copyWith(
+      status: ConnectionStatus.idle,
+      statusMessage: 'Permissions granted.',
+      clearErrorMessage: true,
+    );
+    return true;
+  }
+
   Future<void> stopHost() async {
     await safeExecute(
       operation: () async {
@@ -181,7 +205,18 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
     state = state.copyWith(clearErrorMessage: true);
   }
 
+  Future<void> openPermissionSettings() async {
+    await _permissionsService.openAppPermissionSettings();
+  }
+
   void _handleP2PEvent(P2PEvent event) {
+    AppLogger.info(
+      'Connection event: ${event.type.name} '
+      'device=${event.device?.displayName ?? '-'} '
+      'connectionId=${event.connectionId ?? '-'} '
+      'message=${event.message ?? '-'}',
+    );
+
     switch (event.type) {
       case P2PEventType.advertisingStarted:
         state = state.copyWith(
@@ -226,6 +261,30 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
         state = state.copyWith(
           discoveredDevices: devices,
           statusMessage: 'Found ${devices.length} nearby device(s).',
+        );
+        break;
+      case P2PEventType.deviceLost:
+        final lostDevice = event.device;
+        if (lostDevice == null) {
+          break;
+        }
+
+        final devices = state.discoveredDevices
+            .where((item) => item.endpointId != lostDevice.endpointId)
+            .toList();
+
+        final selectedWasLost =
+            state.selectedDevice?.endpointId == lostDevice.endpointId;
+
+        state = state.copyWith(
+          discoveredDevices: devices,
+          status: selectedWasLost
+              ? ConnectionStatus.disconnected
+              : state.status,
+          clearSelectedDevice: selectedWasLost,
+          statusMessage: selectedWasLost
+              ? '${lostDevice.displayName} is no longer available.'
+              : 'Found ${devices.length} nearby device(s).',
         );
         break;
       case P2PEventType.connectionRequested:

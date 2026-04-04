@@ -61,3 +61,5 @@ Recent Updates (2026-02-12)
 - Started Phase 2 handshake bootstrap with modular connection models/services/provider.
 - Added Connect Devices flow (Host/Guest) with confirmation dialog and single-guest scope.
 - Wired native Nearby Connections + runtime permission handling for Android handshake.
+- Improved handshake UX with device-lost handling, guest rescan, and app-settings recovery links.
+- Fixed trip history provider family typing to remove analyzer blocking errors.

@@ -45,7 +45,10 @@ class _GuestScanScreenState extends ConsumerState<GuestScanScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Role: Guest', style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Role: Guest',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 8),
                   Text('Status: ${state.status.name}'),
                   if (state.statusMessage != null) ...[
@@ -57,30 +60,42 @@ class _GuestScanScreenState extends ConsumerState<GuestScanScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          Text(
-            'Nearby Hosts',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text('Nearby Hosts', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           if (state.discoveredDevices.isEmpty)
             const Text('No hosts found yet.')
           else
             ...state.discoveredDevices
-                .map((device) => _DeviceTile(device: device, onTap: _confirmConnect))
+                .map(
+                  (device) =>
+                      _DeviceTile(device: device, onTap: _confirmConnect),
+                )
                 .toList(),
+          const SizedBox(height: 12),
+          PrimaryButton(
+            label: state.status == ConnectionStatus.discovering
+                ? 'Scanning...'
+                : 'Rescan Nearby Hosts',
+            onPressed: state.status == ConnectionStatus.discovering
+                ? null
+                : () => ref
+                      .read(connectionControllerProvider.notifier)
+                      .startGuestScan(),
+          ),
           if (state.status == ConnectionStatus.connected) ...[
             const SizedBox(height: 12),
             PrimaryButton(
               label: 'Disconnect',
-              onPressed: () => ref
-                  .read(connectionControllerProvider.notifier)
-                  .disconnect(),
+              onPressed: () =>
+                  ref.read(connectionControllerProvider.notifier).disconnect(),
             ),
           ],
           const SizedBox(height: 12),
           TextButton(
             onPressed: () async {
-              await ref.read(connectionControllerProvider.notifier).stopGuestScan();
+              await ref
+                  .read(connectionControllerProvider.notifier)
+                  .stopGuestScan();
               if (mounted) {
                 Navigator.of(context).pop();
               }
@@ -93,6 +108,22 @@ class _GuestScanScreenState extends ConsumerState<GuestScanScreen> {
               state.errorMessage!,
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
+            if (state.status == ConnectionStatus.permissionDenied) ...[
+              const SizedBox(height: 8),
+              PrimaryButton(
+                label: 'Request Permissions Again',
+                onPressed: () => ref
+                    .read(connectionControllerProvider.notifier)
+                    .requestPermissionsOnly(),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => ref
+                    .read(connectionControllerProvider.notifier)
+                    .openPermissionSettings(),
+                child: const Text('Open App Settings'),
+              ),
+            ],
           ],
         ],
       ),
@@ -119,7 +150,9 @@ class _GuestScanScreenState extends ConsumerState<GuestScanScreen> {
     );
 
     if (accepted == true && mounted) {
-      await ref.read(connectionControllerProvider.notifier).requestConnection(device);
+      await ref
+          .read(connectionControllerProvider.notifier)
+          .requestConnection(device);
     }
   }
 }
@@ -128,10 +161,7 @@ class _DeviceTile extends StatelessWidget {
   final DiscoveredDevice device;
   final ValueChanged<DiscoveredDevice> onTap;
 
-  const _DeviceTile({
-    required this.device,
-    required this.onTap,
-  });
+  const _DeviceTile({required this.device, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

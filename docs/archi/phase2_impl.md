@@ -14,6 +14,16 @@ Started Phase 2 with a modular handshake foundation for nearby device discovery 
 - Integrated `nearby_connections` into `P2PService` for advertise/discover/request/accept/reject/disconnect.
 - Integrated `permission_handler` in `PermissionsService` for runtime Bluetooth/location checks.
 - Added required Android manifest permissions for Nearby.
+- Added device-lost event handling from discovery callbacks.
+- Added permission recovery actions (`Open App Settings`) in Host and Guest screens.
+- Added guest re-scan action to improve discovery retry UX.
+- Added explicit `Request Permissions Again` actions on Host/Guest permission-denied states.
+- Made Android permission requests SDK-aware to avoid unsupported permission prompts.
+- Fixed Android manifest permission declarations (removed invalid `minSdkVersion` usage on `uses-permission`).
+- Updated location permission request policy: request location only on Android SDK `<= 32`.
+- Fixed Nearby host start failure on Android 13+ by declaring `ACCESS_WIFI_STATE` and `CHANGE_WIFI_STATE` without SDK caps.
+- Fixed guest discovery failure (`MISSING_PERMISSION_ACCESS_COARSE_LOCATION`) by declaring coarse/fine location permissions without SDK caps and requesting location permission explicitly.
+- Mitigated host startup timeouts by making advertising start non-blocking and tolerant of delayed Nearby plugin responses.
 
 ## Architecture Mapping
 ### Providers
@@ -65,6 +75,7 @@ Started Phase 2 with a modular handshake foundation for nearby device discovery 
 - Nearby handshake currently supports Android only in this phase.
 - Location service must be enabled for stable Nearby discovery/connection.
 - Confirmation dialogs are implemented at UI level for both Host and Guest flow.
+- If a discovered host disappears, Guest UI now removes it and updates status.
 
 ## Next Step
 - Improve endpoint-lost UX on Guest scan screen.

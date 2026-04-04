@@ -51,6 +51,31 @@ class _HostLobbyScreenState extends ConsumerState<HostLobbyScreen> {
         children: [
           _StatusCard(state: state),
           const SizedBox(height: 12),
+          if (state.status == ConnectionStatus.permissionDenied) ...[
+            PrimaryButton(
+              label: 'Request Permissions Again',
+              onPressed: () => ref
+                  .read(connectionControllerProvider.notifier)
+                  .requestPermissionsOnly(),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => ref
+                  .read(connectionControllerProvider.notifier)
+                  .openPermissionSettings(),
+              child: const Text('Open App Settings'),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (state.status != ConnectionStatus.advertising &&
+              state.status != ConnectionStatus.connected) ...[
+            PrimaryButton(
+              label: 'Restart Lobby',
+              onPressed: () => ref
+                  .read(connectionControllerProvider.notifier)
+                  .startHost(hostName: 'Trippin Host'),
+            ),
+          ],
           if (state.status == ConnectionStatus.connected) ...[
             const SizedBox(height: 12),
             PrimaryButton(
