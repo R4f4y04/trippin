@@ -368,6 +368,7 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
       case SyncEventType.envelopeReceived:
       case SyncEventType.envelopeSent:
       case SyncEventType.invalidEnvelope:
+      case SyncEventType.queueFlushed:
         break;
     }
   }

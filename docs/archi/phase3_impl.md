@@ -75,11 +75,28 @@ Still deferred from this step:
 - Add pending/synced visual markers for guest-created expenses.
 
 ### Step 4: Queue + Reconnection Flush
-Status: Not Started
+Status: Complete (Baseline)
 
 Planned:
 - Guest offline outbox queue and in-order resend.
 - Reconnect-triggered flush.
+
+Implemented:
+- Added persistent sync queue storage in `StorageService` using Hive string box:
+  - `enqueueSyncEnvelope`
+  - `getQueuedSyncEnvelopes` (timestamp-ordered)
+  - `removeQueuedSyncEnvelope`
+  - queue reset integration in `resetAll`
+- Added queue APIs in `SyncService`:
+  - `queueAddExpense` for offline guest expense messages
+  - `flushGuestQueue` for in-order resend on reconnect
+- Added reconnect behavior:
+  - `SyncService.start` auto-triggers queue flush for guest role.
+- Updated `ExpensesController` behavior:
+  - guest + disconnected + local add => queue `ADD_EXPENSE` instead of dropping it.
+
+Still deferred from this step:
+- Backoff/retry scheduling strategy beyond reconnect-triggered flush.
 
 ### Step 5: Provider/UI Wiring + Validation
 Status: Not Started
@@ -93,3 +110,4 @@ Planned:
 - `dart analyze` on changed Phase 3 files: no issues found.
 - `flutter analyze` project-wide: no new errors from this increment; existing baseline warnings/infos remain in unrelated files.
 - `dart analyze` after Step 3 inbound handling: no issues found.
+- `dart analyze` after Step 4 queue + flush wiring: no issues found.

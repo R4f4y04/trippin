@@ -83,7 +83,17 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
     final isConnected =
         connectionState.status == ConnectionStatus.connected &&
         connectionState.activeConnectionId != null;
-    if (!isConnected) return;
+    if (!isConnected) {
+      if (connectionState.role == ConnectionRole.guest &&
+          createdExpense != null) {
+        await _syncService.queueAddExpense(
+          tripId: tripId,
+          expense: createdExpense,
+        );
+        AppLogger.info('Guest queued ADD_EXPENSE for trip $tripId.');
+      }
+      return;
+    }
 
     if (connectionState.role == ConnectionRole.guest &&
         createdExpense != null) {

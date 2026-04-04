@@ -15,6 +15,7 @@ enum SyncEventType {
   invalidEnvelope,
   expenseMergedOnHost,
   ledgerAppliedOnGuest,
+  queueFlushed,
 }
 
 class SyncEvent {
@@ -44,6 +45,10 @@ class SyncService {
     _role = role;
     _p2pSubscription ??= _p2pService.events.listen(_handleP2PEvent);
     AppLogger.info('Sync service started as ${role.name}.');
+
+    if (role == SyncRole.guest) {
+      unawaited(flushGuestQueue());
+    }
   }
 
   Future<void> stop() async {
@@ -73,6 +78,19 @@ class SyncService {
     await _sendEnvelope(envelope);
   }
 
+  Future<void> queueAddExpense({
+    required String tripId,
+    required Expense expense,
+  }) async {
+    final payload = AddExpensePayload(tripId: tripId, expense: expense);
+    final envelope = SyncEnvelope.create(
+      type: SyncMessageType.addExpense,
+      payload: payload.toJson(),
+    );
+    await _storage.enqueueSyncEnvelope(envelope);
+    AppLogger.info('Queued ADD_EXPENSE envelope ${envelope.id}.');
+  }
+
   Future<void> sendSyncLedger({
     required String tripId,
     required List<Expense> expenses,
@@ -98,6 +116,36 @@ class SyncService {
     await _p2pService.sendTextPayload(text: envelope.encode());
     _eventController.add(
       SyncEvent(type: SyncEventType.envelopeSent, envelope: envelope),
+    );
+  }
+
+  Future<void> flushGuestQueue() async {
+    if (_role != SyncRole.guest || !_p2pService.hasActiveConnection) {
+      return;
+    }
+
+    final queued = await _storage.getQueuedSyncEnvelopes();
+    if (queued.isEmpty) {
+      return;
+    }
+
+    var sentCount = 0;
+    for (final envelope in queued) {
+      try {
+        await _sendEnvelope(envelope);
+        await _storage.removeQueuedSyncEnvelope(envelope.id);
+        sentCount += 1;
+      } catch (error, stackTrace) {
+        AppLogger.error('Queue flush interrupted', error, stackTrace);
+        break;
+      }
+    }
+
+    _eventController.add(
+      SyncEvent(
+        type: SyncEventType.queueFlushed,
+        message: 'Flushed $sentCount queued envelope(s).',
+      ),
     );
   }
 

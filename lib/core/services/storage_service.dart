@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../models/expense.dart';
 import '../models/expense_revision.dart';
 import '../models/split_type_adapter.dart';
+import '../models/sync_envelope.dart';
 import '../models/trip.dart';
 import '../models/trip_history_event.dart';
 import '../models/user.dart';
@@ -19,12 +20,14 @@ class StorageService {
   static const _expensesBoxName = 'expenses';
   static const _expenseRevisionsBoxName = 'expense_revisions';
   static const _tripHistoryBoxName = 'trip_history';
+  static const _syncQueueBoxName = 'sync_queue';
 
   Box<User>? _usersBox;
   Box<Trip>? _tripsBox;
   Box<Expense>? _expensesBox;
   Box<ExpenseRevision>? _expenseRevisionsBox;
   Box<TripHistoryEvent>? _tripHistoryBox;
+  Box<String>? _syncQueueBox;
 
   Future<void> initialize() async {
     await safeExecute(
@@ -89,6 +92,69 @@ class StorageService {
     if (_tripHistoryBox?.isOpen ?? false) return _tripHistoryBox!;
     _tripHistoryBox = await Hive.openBox<TripHistoryEvent>(_tripHistoryBoxName);
     return _tripHistoryBox!;
+  }
+
+  Future<Box<String>> _openSyncQueueBox() async {
+    if (_syncQueueBox?.isOpen ?? false) return _syncQueueBox!;
+    _syncQueueBox = await Hive.openBox<String>(_syncQueueBoxName);
+    return _syncQueueBox!;
+  }
+
+  Future<void> enqueueSyncEnvelope(SyncEnvelope envelope) async {
+    final box = await _openSyncQueueBox();
+    await safeExecute(
+      operation: () async {
+        await box.put(envelope.id, envelope.encode());
+      },
+      onError: (error, stackTrace) {
+        AppLogger.error('Failed to enqueue sync envelope', error, stackTrace);
+      },
+    );
+  }
+
+  Future<List<SyncEnvelope>> getQueuedSyncEnvelopes() async {
+    final box = await _openSyncQueueBox();
+    final envelopes = <SyncEnvelope>[];
+    final malformedKeys = <dynamic>[];
+
+    for (final entry in box.toMap().entries) {
+      final decoded = SyncEnvelope.tryDecode(entry.value);
+      if (decoded == null) {
+        malformedKeys.add(entry.key);
+        continue;
+      }
+      envelopes.add(decoded);
+    }
+
+    if (malformedKeys.isNotEmpty) {
+      await safeExecute(
+        operation: () async {
+          await box.deleteAll(malformedKeys);
+        },
+        onError: (error, stackTrace) {
+          AppLogger.error(
+            'Failed to clean malformed queued envelopes',
+            error,
+            stackTrace,
+          );
+        },
+      );
+    }
+
+    envelopes.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    return envelopes;
+  }
+
+  Future<void> removeQueuedSyncEnvelope(String envelopeId) async {
+    final box = await _openSyncQueueBox();
+    await safeExecute(
+      operation: () async {
+        await box.delete(envelopeId);
+      },
+      onError: (error, stackTrace) {
+        AppLogger.error('Failed to remove queued envelope', error, stackTrace);
+      },
+    );
   }
 
   Future<Trip?> getActiveTrip() async {
@@ -615,11 +681,13 @@ class StorageService {
         final expensesBox = await _openExpensesBox();
         final revisionsBox = await _openExpenseRevisionsBox();
         final historyBox = await _openTripHistoryBox();
+        final syncQueueBox = await _openSyncQueueBox();
         await tripsBox.clear();
         await usersBox.clear();
         await expensesBox.clear();
         await revisionsBox.clear();
         await historyBox.clear();
+        await syncQueueBox.clear();
       },
       onError: (error, stackTrace) {
         AppLogger.error('Failed to reset storage', error, stackTrace);

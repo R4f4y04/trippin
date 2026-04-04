@@ -59,6 +59,8 @@ class P2PService {
   bool _isDiscovering = false;
   String? _connectedEndpointId;
 
+  bool get hasActiveConnection => _connectedEndpointId != null;
+
   Future<void> startAdvertising({required String hostName}) async {
     if (!Platform.isAndroid) {
       _eventController.add(
