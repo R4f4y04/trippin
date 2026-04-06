@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/models/connection_state.dart';
 import '../../core/models/discovered_device.dart';
 import '../../core/riverpod/connection_provider.dart';
 
@@ -13,12 +14,18 @@ class JoinTripEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _JoinTripEntryScreenState extends ConsumerState<JoinTripEntryScreen> {
-  bool _isSearching = false;
-
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(connectionControllerProvider);
     final devices = state.discoveredDevices;
+    final isCheckingPermissions =
+        state.status == ConnectionStatus.checkingPermissions;
+    final isDiscovering = state.status == ConnectionStatus.discovering;
+    final isSearching = isCheckingPermissions || isDiscovering;
+    final isPermissionDenied =
+        state.status == ConnectionStatus.permissionDenied;
+    final hasError =
+        state.errorMessage != null && state.errorMessage!.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Join Trip as Guest')),
@@ -35,28 +42,58 @@ class _JoinTripEntryScreenState extends ConsumerState<JoinTripEntryScreen> {
             Row(
               children: [
                 ElevatedButton.icon(
-                  onPressed: _isSearching ? null : _startDiscovery,
+                  onPressed: isSearching ? null : _startDiscovery,
                   icon: const Icon(Icons.search),
-                  label: Text(_isSearching ? 'Searching...' : 'Find Hosts'),
+                  label: Text(isSearching ? 'Searching...' : 'Find Hosts'),
                 ),
                 const SizedBox(width: 8),
                 OutlinedButton(
-                  onPressed: _isSearching ? _stopDiscovery : null,
+                  onPressed: isDiscovering ? _stopDiscovery : null,
                   child: const Text('Stop'),
                 ),
               ],
             ),
+            if (state.statusMessage != null &&
+                state.statusMessage!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                state.statusMessage!,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            if (hasError) ...[
+              const SizedBox(height: 12),
+              Text(
+                state.errorMessage!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ],
+            if (isPermissionDenied) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => ref
+                    .read(connectionControllerProvider.notifier)
+                    .openPermissionSettings(),
+                icon: const Icon(Icons.settings),
+                label: const Text('Open Permission Settings'),
+              ),
+            ],
             const SizedBox(height: 16),
             if (devices.isEmpty)
               Text(
-                'No hosts discovered yet.',
+                isSearching
+                    ? 'Searching for nearby hosts...'
+                    : 'No hosts discovered yet. Tap Find Hosts to scan again.',
                 style: Theme.of(context).textTheme.bodySmall,
               )
             else
               Expanded(
                 child: ListView.separated(
                   itemCount: devices.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final device = devices[index];
                     return ListTile(
@@ -76,14 +113,11 @@ class _JoinTripEntryScreenState extends ConsumerState<JoinTripEntryScreen> {
   }
 
   Future<void> _startDiscovery() async {
-    setState(() => _isSearching = true);
     await ref.read(connectionControllerProvider.notifier).startGuestScan();
   }
 
   Future<void> _stopDiscovery() async {
     await ref.read(connectionControllerProvider.notifier).stopGuestScan();
-    if (!mounted) return;
-    setState(() => _isSearching = false);
   }
 
   Future<void> _connect(DiscoveredDevice device) async {

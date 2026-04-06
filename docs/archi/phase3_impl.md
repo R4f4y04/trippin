@@ -149,6 +149,10 @@ Increment update (functional flow):
 - Implemented add-member option split in trip flow:
   - Added `AddMemberOptionsSheet` with Local Member and Connect Guest paths.
   - Wired host-only connected guest add flow from selected peer.
+- Hardened start/join entry UX behavior:
+  - Start Trip now resets loading state safely on failures and shows explicit error feedback.
+  - Join screen discovery controls now follow provider status (no local drift).
+  - Join screen now surfaces status/error messages and permission-settings recovery action.
 - Detailed implementation progress is tracked in:
   - `docs/archi/home_hub_host_guest_flow_impl.md`
 

@@ -59,6 +59,13 @@ Notes:
 - Join-code admission remains deferred.
 - Current behavior follows existing nearby discovery/connection approach.
 
+Increment update (UX hardening):
+- Join screen now uses provider status as source of truth for discovery state.
+- Added explicit status/error visibility using provider messages.
+- Added permission-denied recovery action to open app settings.
+- Improved empty-state copy for active scanning vs idle retry state.
+- Start Trip creation now guarantees loading state reset on failure and surfaces an error snackbar.
+
 ### Phase 5: Add Member Option Split
 Status: Complete
 

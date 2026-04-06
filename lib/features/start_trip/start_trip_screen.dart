@@ -68,16 +68,24 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen> {
 
     setState(() => _isCreating = true);
 
-    await ref
-        .read(tripControllerProvider.notifier)
-        .createTrip(title: tripName, ownerName: ownerName);
-    await ref.read(membersControllerProvider.notifier).refresh();
-    await ref.read(expensesControllerProvider.notifier).refresh();
+    try {
+      await ref
+          .read(tripControllerProvider.notifier)
+          .createTrip(title: tripName, ownerName: ownerName);
+      await ref.read(membersControllerProvider.notifier).refresh();
+      await ref.read(expensesControllerProvider.notifier).refresh();
 
-    if (!mounted) return;
-    setState(() => _isCreating = false);
-    Navigator.of(context).pop();
-    _showSnack('Trip created');
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      _showSnack('Trip created');
+    } catch (_) {
+      if (!mounted) return;
+      _showSnack('Failed to create trip. Please try again.');
+    } finally {
+      if (mounted) {
+        setState(() => _isCreating = false);
+      }
+    }
   }
 
   void _showSnack(String message) {
