@@ -3,14 +3,14 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/user.dart';
+import '../models/connection_state.dart';
 import '../services/storage_service.dart';
 import '../utils/app_logger.dart';
+import 'connection_provider.dart';
 import 'trip_provider.dart';
 
 final membersControllerProvider =
-    AsyncNotifierProvider<MembersController, List<User>>(
-  MembersController.new,
-);
+    AsyncNotifierProvider<MembersController, List<User>>(MembersController.new);
 
 class MembersController extends AsyncNotifier<List<User>> {
   final _storage = StorageService.instance;
@@ -27,6 +27,12 @@ class MembersController extends AsyncNotifier<List<User>> {
     required String name,
     required String managedBy,
   }) async {
+    final connectionState = ref.read(connectionControllerProvider);
+    if (connectionState.role == ConnectionRole.guest) {
+      AppLogger.warning('Guest role cannot add members in Phase 3.');
+      return false;
+    }
+
     try {
       final member = await _storage.addMemberToTrip(
         tripId: tripId,

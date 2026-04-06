@@ -129,6 +129,11 @@ Implemented:
   - `syncQueueCountProvider` for UI consumption.
   - Trip connection section now shows current queued sync item count.
 - Refactored trip connection UI into reusable `ConnectionStatusBanner` component for cleaner in-trip connection UX.
+- Enforced host-authority mutation constraints for Phase 3:
+  - Guest role cannot add members.
+  - Guest role cannot edit/delete expenses.
+  - Guest role cannot finish trip.
+  - Trip UI actions now disable/guard these unsupported guest operations.
 
 Pending in this step:
 - Run two-device manual validation and capture evidence logs.

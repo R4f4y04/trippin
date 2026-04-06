@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/expense.dart';
+import '../../core/models/connection_state.dart';
 import '../../core/models/trip.dart';
 import '../../core/models/user.dart';
 import '../../core/riverpod/balances_provider.dart';
@@ -64,6 +65,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
         final members = membersAsync.value ?? [];
         final expenses = expensesAsync.value ?? [];
         final isClosed = trip.isClosed;
+        final isGuestRole = connectionState.role == ConnectionRole.guest;
         final memberMap = {
           for (final member in members) member.id: member.name,
         };
@@ -126,7 +128,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                             const SizedBox(height: 12),
                             PrimaryButton(
                               label: 'Add Member',
-                              onPressed: isClosed
+                              onPressed: isClosed || isGuestRole
                                   ? null
                                   : () => _showAddMemberDialog(trip, members),
                             ),
@@ -142,7 +144,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                             ExpensesList(
                               expenses: expenses,
                               memberMap: memberMap,
-                              isReadOnly: isClosed,
+                              isReadOnly: isClosed || isGuestRole,
                               syncStatuses: syncStatuses,
                               onEdit: (expense) => _showEditExpenseDialog(
                                 trip,
@@ -174,7 +176,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                         title: 'Trip Actions',
                         child: PrimaryButton(
                           label: isClosed ? 'Trip Finished' : 'Finish Trip',
-                          onPressed: isClosed
+                          onPressed: isClosed || isGuestRole
                               ? null
                               : () => _confirmCloseTrip(trip),
                         ),
@@ -195,6 +197,12 @@ class _TripScreenState extends ConsumerState<TripScreen> {
   }
 
   Future<void> _showAddMemberDialog(Trip trip, List<User> members) async {
+    final connectionState = ref.read(connectionControllerProvider);
+    if (connectionState.role == ConnectionRole.guest) {
+      _showSnack('Guest mode cannot add members in this phase');
+      return;
+    }
+
     final nameController = TextEditingController();
     final owner = members.where((user) => user.isDeviceOwner).toList();
     if (owner.isEmpty) {
@@ -395,6 +403,12 @@ class _TripScreenState extends ConsumerState<TripScreen> {
   }
 
   Future<void> _confirmCloseTrip(Trip trip) async {
+    final connectionState = ref.read(connectionControllerProvider);
+    if (connectionState.role == ConnectionRole.guest) {
+      _showSnack('Guest mode cannot finish trip in this phase');
+      return;
+    }
+
     final pendingCount = ref
         .read(expenseSyncStatusProvider)
         .values
@@ -507,6 +521,12 @@ class _TripScreenState extends ConsumerState<TripScreen> {
     List<User> members,
     Expense expense,
   ) async {
+    final connectionState = ref.read(connectionControllerProvider);
+    if (connectionState.role == ConnectionRole.guest) {
+      _showSnack('Guest mode cannot edit expenses in this phase');
+      return;
+    }
+
     final nameController = TextEditingController(text: expense.name);
     final amountController = TextEditingController(
       text: expense.amount.toString(),
@@ -639,6 +659,12 @@ class _TripScreenState extends ConsumerState<TripScreen> {
   }
 
   Future<void> _confirmDeleteExpense(Expense expense) async {
+    final connectionState = ref.read(connectionControllerProvider);
+    if (connectionState.role == ConnectionRole.guest) {
+      _showSnack('Guest mode cannot delete expenses in this phase');
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(

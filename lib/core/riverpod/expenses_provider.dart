@@ -55,6 +55,12 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
     required List<String> beneficiaryIds,
     String? note,
   }) async {
+    final connectionState = ref.read(connectionControllerProvider);
+    if (connectionState.role == ConnectionRole.guest) {
+      AppLogger.warning('Guest role cannot edit expenses in Phase 3.');
+      return;
+    }
+
     await _storage.updateExpense(
       expenseId: expenseId,
       name: name,
@@ -69,6 +75,12 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
   }
 
   Future<void> deleteExpense({required String expenseId}) async {
+    final connectionState = ref.read(connectionControllerProvider);
+    if (connectionState.role == ConnectionRole.guest) {
+      AppLogger.warning('Guest role cannot delete expenses in Phase 3.');
+      return;
+    }
+
     final existing = await _storage.getExpense(expenseId);
     await _storage.deleteExpense(expenseId: expenseId);
     await _syncAfterLocalMutation(tripId: existing?.tripId);
