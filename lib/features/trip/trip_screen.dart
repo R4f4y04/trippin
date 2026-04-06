@@ -16,6 +16,7 @@ import '../../ui_components/primary_button.dart';
 import '../connection/connect_screen.dart';
 import 'components/balances_list.dart';
 import 'components/closed_banner.dart';
+import 'components/connection_status_banner.dart';
 import 'components/error_state.dart';
 import 'components/expenses_list.dart';
 import 'components/members_list.dart';
@@ -94,69 +95,25 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                       ],
                       TripSummaryCard(trip: trip, memberCount: members.length),
                       const SizedBox(height: 12),
-                      SectionCard(
-                        title: 'Connection',
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Role: ${connectionState.role.name.toUpperCase()}',
-                            ),
-                            const SizedBox(height: 4),
-                            Text('Status: ${connectionState.status.name}'),
-                            if (connectionState.selectedDevice != null) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                'Peer: ${connectionState.selectedDevice!.displayName}',
-                              ),
-                            ],
-                            if (connectionState.statusMessage != null) ...[
-                              const SizedBox(height: 4),
-                              Text(connectionState.statusMessage!),
-                            ],
-                            const SizedBox(height: 4),
-                            Text(
-                              queuedCountAsync.when(
-                                data: (count) => 'Queued sync items: $count',
-                                loading: () => 'Queued sync items: ...',
-                                error: (error, stackTrace) =>
-                                    'Queued sync items: unavailable',
-                              ),
-                            ),
-                            if (syncStatuses.values.any(
-                              (status) => status != ExpenseSyncStatus.synced,
-                            )) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                'Some items are waiting to sync.',
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 12),
-                            PrimaryButton(
-                              label: 'Manage Connection',
-                              onPressed: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => const ConnectScreen(),
-                                ),
-                              ),
-                            ),
-                            if (connectionState.isConnected &&
-                                connectionState.selectedDevice != null &&
-                                !isClosed) ...[
-                              const SizedBox(height: 8),
-                              PrimaryButton(
-                                label: 'Add Connected Guest As Member',
-                                onPressed: () => _addConnectedGuestAsMember(
-                                  trip,
-                                  members,
-                                  connectionState.selectedDevice!.displayName,
-                                ),
-                              ),
-                            ],
-                          ],
+                      ConnectionStatusBanner(
+                        connectionState: connectionState,
+                        queuedCount: queuedCountAsync.valueOrNull,
+                        hasUnsyncedItems: syncStatuses.values.any(
+                          (status) => status != ExpenseSyncStatus.synced,
+                        ),
+                        canAddConnectedGuest:
+                            connectionState.isConnected &&
+                            connectionState.selectedDevice != null &&
+                            !isClosed,
+                        onManageConnection: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ConnectScreen(),
+                          ),
+                        ),
+                        onAddConnectedGuest: () => _addConnectedGuestAsMember(
+                          trip,
+                          members,
+                          connectionState.selectedDevice?.displayName ?? '',
                         ),
                       ),
                       const SizedBox(height: 12),

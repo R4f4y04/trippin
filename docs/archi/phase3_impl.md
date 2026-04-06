@@ -128,6 +128,7 @@ Implemented:
   - `StorageService.getQueuedSyncEnvelopeCount` accessor.
   - `syncQueueCountProvider` for UI consumption.
   - Trip connection section now shows current queued sync item count.
+- Refactored trip connection UI into reusable `ConnectionStatusBanner` component for cleaner in-trip connection UX.
 
 Pending in this step:
 - Run two-device manual validation and capture evidence logs.
