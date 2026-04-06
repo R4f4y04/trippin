@@ -98,6 +98,9 @@ Implemented:
 Still deferred from this step:
 - Backoff/retry scheduling strategy beyond reconnect-triggered flush.
 
+Increment update:
+- Hardened `flushGuestQueue` to report partial failures and preserve unsent queued envelopes for future reconnect attempts.
+
 ### Step 5: Provider/UI Wiring + Validation
 Status: In Progress
 
@@ -116,6 +119,11 @@ Implemented:
 - Added sync badges in trip expenses UI:
   - `ExpensesList` now renders compact status chips (Pending/Retrying/Synced)
   - `TripScreen` passes sync-status map into `ExpensesList`
+- Added trip-context connection section in `TripScreen`:
+  - Displays role/status/peer info.
+  - Adds direct `Manage Connection` action from trip flow.
+  - Adds `Add Connected Guest As Member` quick action.
+  - Adds close-trip warning when unsynced items exist.
 
 Pending in this step:
 - Run two-device manual validation and capture evidence logs.
@@ -126,3 +134,30 @@ Pending in this step:
 - `dart analyze` after Step 3 inbound handling: no issues found.
 - `dart analyze` after Step 4 queue + flush wiring: no issues found.
 - `dart analyze` after Step 5 status provider + UI badges: no issues found.
+
+## Next Execution Sequence (Locked)
+1. Functional hardening first:
+  - Improve guest queue flush reliability for partial failures.
+  - Preserve idempotent merge semantics on host for repeated envelopes.
+2. Trip-context UX second:
+  - Add explicit connection state panel in Trip screen.
+  - Add in-trip action to manage connection and link connected guest as trip member.
+3. Validation third:
+  - Two-device matrix for connected/offline/reconnect flows.
+  - Local-only regression checks.
+4. Phase 3 closure docs after evidence capture.
+
+## Remaining Functional Items Before Phase 3 Sign-Off
+- Queue flush resilience improvement (partial failure handling).
+- Explicit guest update/delete behavior documentation (host-authority constraints).
+- Two-device validation evidence capture.
+
+## Known Constraints (Current Scope)
+- Android only.
+- Single guest only.
+- Host is authoritative ledger source.
+- Guest create is sync-supported; guest update/delete semantics remain constrained by host-authority flow in this phase.
+
+## Deferred Tracking
+Centralized deferred items are tracked in:
+- `docs/DEFERRED_BACKLOG.md`

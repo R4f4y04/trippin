@@ -130,6 +130,7 @@ class SyncService {
     }
 
     var sentCount = 0;
+    var failedCount = 0;
     for (final envelope in queued) {
       try {
         await _sendEnvelope(envelope);
@@ -137,14 +138,18 @@ class SyncService {
         sentCount += 1;
       } catch (error, stackTrace) {
         AppLogger.error('Queue flush interrupted', error, stackTrace);
-        break;
+        failedCount += 1;
+        if (!_p2pService.hasActiveConnection) {
+          break;
+        }
       }
     }
 
     _eventController.add(
       SyncEvent(
         type: SyncEventType.queueFlushed,
-        message: 'Flushed $sentCount queued envelope(s).',
+        message:
+            'Flushed $sentCount queued envelope(s), $failedCount failed this attempt.',
       ),
     );
   }

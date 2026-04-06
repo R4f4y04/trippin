@@ -5,12 +5,14 @@ import '../../core/models/expense.dart';
 import '../../core/models/trip.dart';
 import '../../core/models/user.dart';
 import '../../core/riverpod/balances_provider.dart';
+import '../../core/riverpod/connection_provider.dart';
 import '../../core/riverpod/expense_sync_status_provider.dart';
 import '../../core/riverpod/expenses_provider.dart';
 import '../../core/riverpod/members_provider.dart';
 import '../../core/riverpod/trip_list_provider.dart';
 import '../../core/riverpod/trip_provider.dart';
 import '../../ui_components/primary_button.dart';
+import '../connection/connect_screen.dart';
 import 'components/balances_list.dart';
 import 'components/closed_banner.dart';
 import 'components/error_state.dart';
@@ -34,6 +36,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
     final expensesAsync = ref.watch(expensesControllerProvider);
     final balances = ref.watch(balancesProvider);
     final syncStatuses = ref.watch(expenseSyncStatusProvider);
+    final connectionState = ref.watch(connectionControllerProvider);
 
     return tripAsync.when(
       loading: () =>
@@ -88,6 +91,63 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                         const SizedBox(height: 12),
                       ],
                       TripSummaryCard(trip: trip, memberCount: members.length),
+                      const SizedBox(height: 12),
+                      SectionCard(
+                        title: 'Connection',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Role: ${connectionState.role.name.toUpperCase()}',
+                            ),
+                            const SizedBox(height: 4),
+                            Text('Status: ${connectionState.status.name}'),
+                            if (connectionState.selectedDevice != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Peer: ${connectionState.selectedDevice!.displayName}',
+                              ),
+                            ],
+                            if (connectionState.statusMessage != null) ...[
+                              const SizedBox(height: 4),
+                              Text(connectionState.statusMessage!),
+                            ],
+                            if (syncStatuses.values.any(
+                              (status) => status != ExpenseSyncStatus.synced,
+                            )) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Some items are waiting to sync.',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            PrimaryButton(
+                              label: 'Manage Connection',
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const ConnectScreen(),
+                                ),
+                              ),
+                            ),
+                            if (connectionState.isConnected &&
+                                connectionState.selectedDevice != null &&
+                                !isClosed) ...[
+                              const SizedBox(height: 8),
+                              PrimaryButton(
+                                label: 'Add Connected Guest As Member',
+                                onPressed: () => _addConnectedGuestAsMember(
+                                  trip,
+                                  members,
+                                  connectionState.selectedDevice!.displayName,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 12),
                       SectionCard(
                         title: 'Members',
@@ -366,11 +426,21 @@ class _TripScreenState extends ConsumerState<TripScreen> {
   }
 
   Future<void> _confirmCloseTrip(Trip trip) async {
+    final pendingCount = ref
+        .read(expenseSyncStatusProvider)
+        .values
+        .where((status) => status != ExpenseSyncStatus.synced)
+        .length;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Finish Trip'),
-        content: const Text('This will make the trip read-only.'),
+        content: Text(
+          pendingCount > 0
+              ? 'There are $pendingCount unsynced item(s). Finishing now may leave other devices behind. Continue?'
+              : 'This will make the trip read-only.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -391,6 +461,51 @@ class _TripScreenState extends ConsumerState<TripScreen> {
       await ref.read(tripListControllerProvider.notifier).refresh();
       _showSnack('Trip finished');
     }
+  }
+
+  Future<void> _addConnectedGuestAsMember(
+    Trip trip,
+    List<User> members,
+    String guestName,
+  ) async {
+    if (trip.isClosed) {
+      _showSnack('Trip is closed');
+      return;
+    }
+
+    final normalizedGuestName = guestName.trim();
+    if (normalizedGuestName.isEmpty) {
+      _showSnack('Connected guest name is unavailable');
+      return;
+    }
+
+    final alreadyExists = members.any(
+      (member) =>
+          member.name.trim().toLowerCase() == normalizedGuestName.toLowerCase(),
+    );
+    if (alreadyExists) {
+      _showSnack('Connected guest already exists in members');
+      return;
+    }
+
+    final owner = members.where((user) => user.isDeviceOwner).toList();
+    if (owner.isEmpty) {
+      _showSnack('Device owner not found');
+      return;
+    }
+
+    final success = await ref
+        .read(membersControllerProvider.notifier)
+        .addMember(
+          tripId: trip.id,
+          name: normalizedGuestName,
+          managedBy: owner.first.id,
+        );
+    _showSnack(
+      success
+          ? 'Connected guest added as member'
+          : 'Failed to add connected guest',
+    );
   }
 
   Future<void> _confirmReopenTrip(Trip trip) async {

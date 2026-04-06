@@ -85,3 +85,25 @@ All payloads use this envelope:
 - Guest offline adds are retried and converge after reconnect.
 - Malformed/unknown payloads do not crash connection state.
 - Existing local-only features (close/reopen/history/export) continue to work.
+
+## Mutation Rules (Phase 3)
+- Host remains canonical source of truth for ledger state.
+- Guest create is supported through `ADD_EXPENSE` -> Host merge -> Host `SYNC_LEDGER` broadcast.
+- Guest update/delete behavior is not expanded with dedicated payload types in this phase; canonical correction comes from host ledger broadcast.
+
+## Validation Matrix (Required For Phase 3 Closure)
+1. Host connected add:
+  - Host creates expense.
+  - Guest receives canonical ledger.
+  - Both ledgers and totals converge.
+2. Guest connected add:
+  - Guest creates expense.
+  - Host ingests add and rebroadcasts canonical ledger.
+  - Guest expense transitions to synced.
+3. Guest disconnected add + reconnect:
+  - Guest creates one or more expenses while disconnected.
+  - Queue persists and flushes on reconnect.
+  - Host and guest converge with no duplicates.
+4. Mid-flush instability:
+  - Simulate interruption during queue flush.
+  - No data loss for unsent queued items.
