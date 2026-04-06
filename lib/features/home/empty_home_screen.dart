@@ -5,6 +5,7 @@ import 'components/action_pill.dart';
 
 class EmptyHomeScreen extends StatelessWidget {
   final VoidCallback onStartTrip;
+  final VoidCallback onJoinTrip;
   final VoidCallback onOpenHistory;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenAbout;
@@ -13,6 +14,7 @@ class EmptyHomeScreen extends StatelessWidget {
   const EmptyHomeScreen({
     super.key,
     required this.onStartTrip,
+    required this.onJoinTrip,
     required this.onOpenHistory,
     required this.onOpenSettings,
     required this.onOpenAbout,
@@ -46,7 +48,13 @@ class EmptyHomeScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            PrimaryButton(label: 'Start a Trip', onPressed: onStartTrip),
+            PrimaryButton(label: 'Start Trip as Host', onPressed: onStartTrip),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: onJoinTrip,
+              icon: const Icon(Icons.group_add_outlined),
+              label: const Text('Join a Trip as Guest'),
+            ),
             const SizedBox(height: 12),
             TextButton(
               onPressed: onCreateSampleTrip,

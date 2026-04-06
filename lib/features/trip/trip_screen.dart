@@ -15,6 +15,7 @@ import '../../core/riverpod/trip_list_provider.dart';
 import '../../core/riverpod/trip_provider.dart';
 import '../../ui_components/primary_button.dart';
 import '../connection/connect_screen.dart';
+import 'components/add_member_options_sheet.dart';
 import 'components/balances_list.dart';
 import 'components/closed_banner.dart';
 import 'components/connection_status_banner.dart';
@@ -69,6 +70,11 @@ class _TripScreenState extends ConsumerState<TripScreen> {
         final memberMap = {
           for (final member in members) member.id: member.name,
         };
+        final canAddConnectedGuest =
+            connectionState.role == ConnectionRole.host &&
+            connectionState.isConnected &&
+            connectionState.selectedDevice != null &&
+            !isClosed;
 
         final isLoading = membersAsync.isLoading || expensesAsync.isLoading;
 
@@ -109,11 +115,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                         hasUnsyncedItems: syncStatuses.values.any(
                           (status) => status != ExpenseSyncStatus.synced,
                         ),
-                        canAddConnectedGuest:
-                            connectionState.role == ConnectionRole.host &&
-                            connectionState.isConnected &&
-                            connectionState.selectedDevice != null &&
-                            !isClosed,
+                        canAddConnectedGuest: canAddConnectedGuest,
                         onManageConnection: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => const ConnectScreen(),
@@ -137,7 +139,11 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                               label: 'Add Member',
                               onPressed: isClosed || isGuestRole
                                   ? null
-                                  : () => _showAddMemberDialog(trip, members),
+                                  : () => _showAddMemberOptions(
+                                      trip,
+                                      members,
+                                      canAddConnectedGuest,
+                                    ),
                             ),
                           ],
                         ),
@@ -271,6 +277,38 @@ class _TripScreenState extends ConsumerState<TripScreen> {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _showAddMemberOptions(
+    Trip trip,
+    List<User> members,
+    bool canAddConnectedGuest,
+  ) async {
+    if (trip.isClosed) {
+      _showSnack('Trip is closed');
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => AddMemberOptionsSheet(
+        canConnectGuest: canAddConnectedGuest,
+        onAddLocalMember: () {
+          Navigator.of(sheetContext).pop();
+          _showAddMemberDialog(trip, members);
+        },
+        onConnectGuest: () {
+          final guestName =
+              ref
+                  .read(connectionControllerProvider)
+                  .selectedDevice
+                  ?.displayName ??
+              '';
+          Navigator.of(sheetContext).pop();
+          _addConnectedGuestAsMember(trip, members, guestName);
+        },
+      ),
     );
   }
 

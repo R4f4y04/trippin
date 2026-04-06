@@ -4,10 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/riverpod/expenses_provider.dart';
 import '../../core/riverpod/members_provider.dart';
 import '../../core/riverpod/trip_provider.dart';
-import '../../ui_components/primary_button.dart';
 import '../about/about_screen.dart';
 import '../history/trip_history_screen.dart';
+import '../join_trip/join_trip_entry_screen.dart';
 import '../settings/settings_screen.dart';
+import '../start_trip/start_trip_screen.dart';
 import '../trip/components/error_state.dart';
 import '../trip/trip_screen.dart';
 import 'empty_home_screen.dart';
@@ -25,9 +26,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final tripAsync = ref.watch(tripControllerProvider);
 
     return tripAsync.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (error, _) => Scaffold(
         body: ErrorState(
           message: 'Failed to load trip',
@@ -41,7 +41,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
         return Scaffold(
           body: EmptyHomeScreen(
-            onStartTrip: _showCreateTripDialog,
+            onStartTrip: _openStartTrip,
+            onJoinTrip: _openJoinTrip,
             onOpenHistory: _openTripHistory,
             onOpenSettings: _openSettings,
             onOpenAbout: _openAbout,
@@ -52,83 +53,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Future<void> _showCreateTripDialog() async {
-    final titleController = TextEditingController();
-    final ownerController = TextEditingController();
+  Future<void> _openStartTrip() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const StartTripScreen()));
+  }
 
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        bool isSaving = false;
-        return StatefulBuilder(
-          builder: (context, setState) => AlertDialog(
-            title: const Text('Create Trip'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Trip Title'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: ownerController,
-                  decoration:
-                      const InputDecoration(labelText: 'Your Name (Owner)'),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              PrimaryButton(
-                label: 'Create',
-                isLoading: isSaving,
-                onPressed: () async {
-                  final title = titleController.text.trim();
-                  final ownerName = ownerController.text.trim();
-                  if (title.isEmpty || ownerName.isEmpty) {
-                    _showSnack('Title and owner name are required');
-                    return;
-                  }
-                  setState(() => isSaving = true);
-                  await ref.read(tripControllerProvider.notifier).createTrip(
-                        title: title,
-                        ownerName: ownerName,
-                      );
-                  await ref.read(membersControllerProvider.notifier).refresh();
-                  await ref.read(expensesControllerProvider.notifier).refresh();
-                  if (mounted) {
-                    Navigator.of(context).pop();
-                    _showSnack('Trip created');
-                  }
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
+  Future<void> _openJoinTrip() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const JoinTripEntryScreen()));
   }
 
   void _openTripHistory() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const TripHistoryScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const TripHistoryScreen()));
   }
 
   void _openSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SettingsScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
   }
 
   void _openAbout() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const AboutScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const AboutScreen()));
   }
 
   Future<void> _createSampleTrip() async {
@@ -139,8 +91,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }

@@ -140,6 +140,18 @@ Implemented:
 Pending in this step:
 - Run two-device manual validation and capture evidence logs.
 
+Increment update (functional flow):
+- Began implementing Home Hub + role-first routing from `home_hub_host_guest_flow_spec.md`.
+- Replaced inline trip creation dialog in Home with dedicated routes:
+  - `StartTripScreen` for host trip creation.
+  - `JoinTripEntryScreen` for guest discovery and request flow.
+- Updated empty-home UX copy and actions to make Host vs Guest choices explicit.
+- Implemented add-member option split in trip flow:
+  - Added `AddMemberOptionsSheet` with Local Member and Connect Guest paths.
+  - Wired host-only connected guest add flow from selected peer.
+- Detailed implementation progress is tracked in:
+  - `docs/archi/home_hub_host_guest_flow_impl.md`
+
 Execution status update:
 - Validation execution has started.
 - Evidence is being tracked in `docs/VALIDATION_LOG.md`.
