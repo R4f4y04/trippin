@@ -61,3 +61,15 @@ Centralized deferred items across phases. This file is the single source of trut
 - Reason deferred: Not required for baseline shipping loop.
 - Revisit trigger: Post-Phase 4 quality/stability cycle.
 - Priority: Low.
+
+### 4. Full Join-Code Trip Admission Protocol
+- Scope: Join-trip by code/QR and trip-level admission independent of nearby scan-only launcher flow.
+- Reason deferred: Current increment uses structured join entry that routes into existing nearby lobby discovery.
+- Revisit trigger: After baseline Home Hub + Host/Guest flow rollout stabilizes.
+- Priority: Medium.
+
+### 5. Final Visual Design System Pass
+- Scope: Final look/feel, refined spacing, motion, typography, icon polish, and copy tuning after flow stabilization.
+- Reason deferred: Product team requested functional flow lock before exact visual touchups.
+- Revisit trigger: Once core host/guest navigation and role access flows are accepted.
+- Priority: Medium.

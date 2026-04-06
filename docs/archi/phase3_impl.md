@@ -178,3 +178,6 @@ Execution status update:
 ## Deferred Tracking
 Centralized deferred items are tracked in:
 - `docs/DEFERRED_BACKLOG.md`
+
+## Related Product Flow Spec
+- `docs/archi/home_hub_host_guest_flow_spec.md`
