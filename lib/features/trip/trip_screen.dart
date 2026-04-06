@@ -9,6 +9,7 @@ import '../../core/riverpod/connection_provider.dart';
 import '../../core/riverpod/expense_sync_status_provider.dart';
 import '../../core/riverpod/expenses_provider.dart';
 import '../../core/riverpod/members_provider.dart';
+import '../../core/riverpod/sync_queue_provider.dart';
 import '../../core/riverpod/trip_list_provider.dart';
 import '../../core/riverpod/trip_provider.dart';
 import '../../ui_components/primary_button.dart';
@@ -37,6 +38,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
     final balances = ref.watch(balancesProvider);
     final syncStatuses = ref.watch(expenseSyncStatusProvider);
     final connectionState = ref.watch(connectionControllerProvider);
+    final queuedCountAsync = ref.watch(syncQueueCountProvider);
 
     return tripAsync.when(
       loading: () =>
@@ -112,6 +114,15 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                               const SizedBox(height: 4),
                               Text(connectionState.statusMessage!),
                             ],
+                            const SizedBox(height: 4),
+                            Text(
+                              queuedCountAsync.when(
+                                data: (count) => 'Queued sync items: $count',
+                                loading: () => 'Queued sync items: ...',
+                                error: (error, stackTrace) =>
+                                    'Queued sync items: unavailable',
+                              ),
+                            ),
                             if (syncStatuses.values.any(
                               (status) => status != ExpenseSyncStatus.synced,
                             )) ...[
@@ -223,6 +234,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
     await ref.read(tripControllerProvider.notifier).refresh();
     await ref.read(membersControllerProvider.notifier).refresh();
     await ref.read(expensesControllerProvider.notifier).refresh();
+    await ref.read(syncQueueCountProvider.notifier).refresh();
   }
 
   Future<void> _showAddMemberDialog(Trip trip, List<User> members) async {

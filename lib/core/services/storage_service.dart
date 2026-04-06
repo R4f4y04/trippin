@@ -157,6 +157,11 @@ class StorageService {
     );
   }
 
+  Future<int> getQueuedSyncEnvelopeCount() async {
+    final box = await _openSyncQueueBox();
+    return box.length;
+  }
+
   Future<Trip?> getActiveTrip() async {
     final box = await _openTripsBox();
     if (box.isEmpty) return null;

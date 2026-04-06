@@ -7,6 +7,7 @@ import '../services/sync_service.dart';
 import '../utils/app_logger.dart';
 import 'connection_provider.dart';
 import 'expense_sync_status_provider.dart';
+import 'sync_queue_provider.dart';
 import 'trip_provider.dart';
 
 final expensesControllerProvider =
@@ -94,6 +95,7 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
           tripId: tripId,
           expense: createdExpense,
         );
+        await ref.read(syncQueueCountProvider.notifier).refresh();
         AppLogger.info('Guest queued ADD_EXPENSE for trip $tripId.');
       }
       return;

@@ -8,6 +8,7 @@ import '../models/sync_envelope.dart';
 import '../models/sync_payloads.dart';
 import 'expenses_provider.dart';
 import 'expense_sync_status_provider.dart';
+import 'sync_queue_provider.dart';
 import '../services/p2p_service.dart';
 import '../services/permissions_service.dart';
 import '../services/storage_service.dart';
@@ -324,6 +325,7 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
         );
         if (state.role == ConnectionRole.guest) {
           unawaited(_sendGuestHandshake());
+          unawaited(ref.read(syncQueueCountProvider.notifier).refresh());
         }
         state = state.copyWith(
           status: ConnectionStatus.connected,
@@ -342,6 +344,7 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
         break;
       case P2PEventType.disconnected:
         unawaited(_syncService.stop());
+        unawaited(ref.read(syncQueueCountProvider.notifier).refresh());
         state = state.copyWith(
           status: ConnectionStatus.disconnected,
           activeConnectionId: null,
@@ -389,6 +392,9 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
       case SyncEventType.envelopeSent:
       case SyncEventType.invalidEnvelope:
       case SyncEventType.queueFlushed:
+        if (event.type == SyncEventType.queueFlushed) {
+          unawaited(ref.read(syncQueueCountProvider.notifier).refresh());
+        }
         break;
     }
   }

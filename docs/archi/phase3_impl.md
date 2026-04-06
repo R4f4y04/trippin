@@ -124,6 +124,10 @@ Implemented:
   - Adds direct `Manage Connection` action from trip flow.
   - Adds `Add Connected Guest As Member` quick action.
   - Adds close-trip warning when unsynced items exist.
+- Added queue visibility support:
+  - `StorageService.getQueuedSyncEnvelopeCount` accessor.
+  - `syncQueueCountProvider` for UI consumption.
+  - Trip connection section now shows current queued sync item count.
 
 Pending in this step:
 - Run two-device manual validation and capture evidence logs.
