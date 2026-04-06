@@ -133,6 +133,8 @@ Implemented:
   - Guest role cannot add members.
   - Guest role cannot edit/delete expenses.
   - Guest role cannot finish trip.
+  - Guest role cannot reopen trip.
+  - `Add Connected Guest As Member` action is host-only.
   - Trip UI actions now disable/guard these unsupported guest operations.
 
 Pending in this step:

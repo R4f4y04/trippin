@@ -92,7 +92,13 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                     padding: const EdgeInsets.all(16),
                     children: [
                       if (isClosed) ...[
-                        ClosedBanner(onReopen: () => _confirmReopenTrip(trip)),
+                        ClosedBanner(
+                          onReopen: isGuestRole
+                              ? () => _showSnack(
+                                  'Guest mode cannot reopen trip in this phase',
+                                )
+                              : () => _confirmReopenTrip(trip),
+                        ),
                         const SizedBox(height: 12),
                       ],
                       TripSummaryCard(trip: trip, memberCount: members.length),
@@ -104,6 +110,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                           (status) => status != ExpenseSyncStatus.synced,
                         ),
                         canAddConnectedGuest:
+                            connectionState.role == ConnectionRole.host &&
                             connectionState.isConnected &&
                             connectionState.selectedDevice != null &&
                             !isClosed,
@@ -492,6 +499,12 @@ class _TripScreenState extends ConsumerState<TripScreen> {
   }
 
   Future<void> _confirmReopenTrip(Trip trip) async {
+    final connectionState = ref.read(connectionControllerProvider);
+    if (connectionState.role == ConnectionRole.guest) {
+      _showSnack('Guest mode cannot reopen trip in this phase');
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
