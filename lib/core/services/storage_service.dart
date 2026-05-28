@@ -446,6 +446,27 @@ class StorageService {
     );
   }
 
+  /// Updates lightweight trip metadata (e.g. deviceRole) without
+  /// triggering history events.
+  Future<void> updateTripMeta({
+    required String tripId,
+    String? deviceRole,
+  }) async {
+    final trip = await getTrip(tripId);
+    if (trip == null) return;
+
+    final updated = trip.copyWith(deviceRole: deviceRole);
+    await safeExecute(
+      operation: () async {
+        final tripsBox = await _openTripsBox();
+        await tripsBox.put(updated.id, updated);
+      },
+      onError: (error, stackTrace) {
+        AppLogger.error('Failed to update trip meta', error, stackTrace);
+      },
+    );
+  }
+
   Future<Trip?> getTrip(String id) async {
     final box = await _openTripsBox();
     return box.get(id);

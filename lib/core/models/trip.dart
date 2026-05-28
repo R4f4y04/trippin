@@ -39,6 +39,10 @@ class Trip {
   @HiveField(9)
   final DateTime lastModifiedAt;
 
+  /// 'host', 'guest', or null — used for crash-recovery routing.
+  @HiveField(10)
+  final String? deviceRole;
+
   Trip({
     required this.id,
     required this.title,
@@ -50,6 +54,7 @@ class Trip {
     required this.isClosed,
     required this.closedAt,
     required this.lastModifiedAt,
+    this.deviceRole,
   });
 
   factory Trip.create({required String title}) {
@@ -65,6 +70,7 @@ class Trip {
       isClosed: false,
       closedAt: null,
       lastModifiedAt: now,
+      deviceRole: null,
     );
   }
 
@@ -79,6 +85,7 @@ class Trip {
     bool? isClosed,
     DateTime? closedAt,
     DateTime? lastModifiedAt,
+    String? deviceRole,
   }) {
     return Trip(
       id: id ?? this.id,
@@ -91,6 +98,7 @@ class Trip {
       isClosed: isClosed ?? this.isClosed,
       closedAt: closedAt ?? this.closedAt,
       lastModifiedAt: lastModifiedAt ?? this.lastModifiedAt,
+      deviceRole: deviceRole ?? this.deviceRole,
     );
   }
 
@@ -127,13 +135,14 @@ class TripAdapter extends TypeAdapter<Trip> {
       closedAt: fields[8] as DateTime?,
       lastModifiedAt:
           fields[9] as DateTime? ?? (fields[2] as DateTime),
+      deviceRole: fields[10] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Trip obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(11)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -153,6 +162,8 @@ class TripAdapter extends TypeAdapter<Trip> {
       ..writeByte(8)
       ..write(obj.closedAt)
       ..writeByte(9)
-      ..write(obj.lastModifiedAt);
+      ..write(obj.lastModifiedAt)
+      ..writeByte(10)
+      ..write(obj.deviceRole);
   }
 }

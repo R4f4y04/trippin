@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/trip.dart';
+import '../services/profile_service.dart';
 import '../services/storage_service.dart';
 
 final tripControllerProvider = AsyncNotifierProvider<TripController, Trip?>(
@@ -9,6 +10,7 @@ final tripControllerProvider = AsyncNotifierProvider<TripController, Trip?>(
 
 class TripController extends AsyncNotifier<Trip?> {
   final _storage = StorageService.instance;
+  final _profile = ProfileService.instance;
 
   @override
   Future<Trip?> build() async {
@@ -24,7 +26,16 @@ class TripController extends AsyncNotifier<Trip?> {
       title: title,
       ownerName: ownerName,
     );
-    state = AsyncData(trip);
+
+    // Persist host role and owner name for future sessions.
+    await _profile.setDeviceRole('host');
+    await _profile.setSavedName(ownerName);
+
+    // Tag the trip with the device role.
+    final tagged = trip.copyWith(deviceRole: 'host');
+    await _storage.updateTripMeta(tripId: tagged.id, deviceRole: 'host');
+
+    state = AsyncData(tagged);
   }
 
   Future<void> createSampleTrip() async {
@@ -41,6 +52,8 @@ class TripController extends AsyncNotifier<Trip?> {
   Future<void> closeTrip(String tripId) async {
     state = const AsyncLoading();
     await _storage.closeTrip(tripId: tripId);
+    // Clear device role since trip is finished.
+    await _profile.setDeviceRole(null);
     state = AsyncData(await _storage.getActiveTrip());
   }
 
@@ -48,5 +61,12 @@ class TripController extends AsyncNotifier<Trip?> {
     state = const AsyncLoading();
     await _storage.reopenTrip(tripId: tripId);
     state = AsyncData(await _storage.getActiveTrip());
+  }
+
+  /// Clears the active trip reference so the app returns to Home Hub.
+  /// Used after viewing the settlement summary.
+  Future<void> clearActiveTrip() async {
+    await _profile.setDeviceRole(null);
+    state = const AsyncData(null);
   }
 }

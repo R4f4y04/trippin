@@ -14,7 +14,10 @@ import '../../core/riverpod/sync_queue_provider.dart';
 import '../../core/riverpod/trip_list_provider.dart';
 import '../../core/riverpod/trip_provider.dart';
 import '../../ui_components/primary_button.dart';
+import '../about/about_screen.dart';
 import '../connection/connect_screen.dart';
+import '../history/trip_history_screen.dart';
+import '../settings/settings_screen.dart';
 import 'components/add_member_options_sheet.dart';
 import 'components/balances_list.dart';
 import 'components/closed_banner.dart';
@@ -23,6 +26,7 @@ import 'components/error_state.dart';
 import 'components/expenses_list.dart';
 import 'components/members_list.dart';
 import 'components/section_card.dart';
+import 'components/trip_nav_drawer.dart';
 import 'components/trip_summary_card.dart';
 
 class TripScreen extends ConsumerStatefulWidget {
@@ -76,11 +80,15 @@ class _TripScreenState extends ConsumerState<TripScreen> {
             connectionState.selectedDevice != null &&
             !isClosed;
 
+        final isHost = !isGuestRole;
         final isLoading = membersAsync.isLoading || expensesAsync.isLoading;
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Active Trip'),
+            title: Text(
+              trip.title,
+              overflow: TextOverflow.ellipsis,
+            ),
             actions: [
               IconButton(
                 tooltip: 'Refresh',
@@ -88,6 +96,21 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                 onPressed: _refreshAll,
               ),
             ],
+          ),
+          drawer: TripNavDrawer(
+            trip: trip,
+            isHost: isHost,
+            isClosed: isClosed,
+            onOpenHistory: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const TripHistoryScreen()),
+            ),
+            onOpenSettings: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+            onOpenAbout: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AboutScreen()),
+            ),
+            onFinishTrip: () => _confirmCloseTrip(trip),
           ),
           body: isLoading
               ? const Center(child: CircularProgressIndicator())
