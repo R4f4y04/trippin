@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-
+import '../../core/utils/animations.dart';
+import '../../core/utils/haptics.dart';
 import '../../ui_components/primary_button.dart';
 import 'components/action_pill.dart';
 
@@ -30,11 +31,34 @@ class EmptyHomeScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Styled logo with subtle breathing glow
+            PulsingGlow(
+              glowColor: colorScheme.primary,
+              maxRadius: 6.0,
+              child: Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: colorScheme.primaryContainer.withValues(alpha: 0.2),
+                  border: Border.all(
+                    color: colorScheme.primary,
+                    width: 2.0,
+                  ),
+                ),
+                child: Icon(
+                  Icons.explore_rounded,
+                  size: 40,
+                  color: colorScheme.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
             Text(
               'Trippin',
               style: textTheme.displaySmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
+                letterSpacing: 1.5,
               ),
             ),
             const SizedBox(height: 8),
@@ -45,11 +69,20 @@ class EmptyHomeScreen extends StatelessWidget {
                 color: colorScheme.onSurface.withValues(alpha: 0.7),
               ),
             ),
-            const SizedBox(height: 32),
-            PrimaryButton(label: 'Start a Trip', onPressed: onStartTrip),
+            const SizedBox(height: 36),
+            PrimaryButton(
+              label: 'Start a Trip',
+              onPressed: () {
+                AppHaptics.lightTap();
+                onStartTrip();
+              },
+            ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: onJoinTrip,
+              onPressed: () {
+                AppHaptics.lightTap();
+                onJoinTrip();
+              },
               icon: const Icon(Icons.group_add_outlined),
               label: const Text('Join a Trip'),
             ),
@@ -87,17 +120,26 @@ class EmptyHomeScreen extends StatelessWidget {
                 ActionPill(
                   label: 'History',
                   icon: Icons.history,
-                  onPressed: onOpenHistory,
+                  onPressed: () {
+                    AppHaptics.lightTap();
+                    onOpenHistory();
+                  },
                 ),
                 ActionPill(
                   label: 'Settings',
                   icon: Icons.settings,
-                  onPressed: onOpenSettings,
+                  onPressed: () {
+                    AppHaptics.lightTap();
+                    onOpenSettings();
+                  },
                 ),
                 ActionPill(
                   label: 'About',
                   icon: Icons.info_outline,
-                  onPressed: onOpenAbout,
+                  onPressed: () {
+                    AppHaptics.lightTap();
+                    onOpenAbout();
+                  },
                 ),
               ],
             ),

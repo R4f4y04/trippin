@@ -4,6 +4,8 @@ import '../../../core/models/expense.dart';
 import '../../../core/riverpod/expense_sync_status_provider.dart';
 import '../../../core/utils/currency_format.dart';
 import '../../../core/utils/member_colors.dart';
+import '../../../core/utils/animations.dart';
+import '../../../core/utils/haptics.dart';
 
 /// Redesigned expense list with styled cards featuring:
 /// - Payer color bar on the left edge
@@ -76,7 +78,10 @@ class ExpensesList extends StatelessWidget {
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final expense = sorted[index];
-        return _buildExpenseCard(context, expense);
+        return FadeSlideIn(
+          duration: Duration(milliseconds: 300 + (index < 5 ? index * 80 : 0)), // Staggered entry for first few items
+          child: _buildExpenseCard(context, expense),
+        );
       },
     );
   }
@@ -217,8 +222,10 @@ class ExpensesList extends StatelessWidget {
       key: Key(expense.id),
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.endToStart) {
+          AppHaptics.warningBuzz();
           onDelete(expense);
         } else if (direction == DismissDirection.startToEnd) {
+          AppHaptics.lightTap();
           onEdit(expense);
         }
         return false; // Don't auto-dismiss; callbacks handle it.

@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../core/models/user.dart';
 import '../../../core/utils/member_colors.dart';
 
+import '../../../core/utils/animations.dart';
+import '../../../core/utils/haptics.dart';
+
 /// Horizontal scrollable strip of member avatars with an "Add" button at the end.
 ///
 /// Each avatar is a circle showing the member's initial in their assigned color.
@@ -32,7 +35,10 @@ class MemberAvatarStrip extends StatelessWidget {
           if (index == members.length) {
             return _buildAddButton(context);
           }
-          return _buildAvatar(context, index, members[index]);
+          return PopIn(
+            duration: Duration(milliseconds: 400 + (index < 6 ? index * 60 : 0)), // Staggered pop-in for members
+            child: _buildAvatar(context, index, members[index]),
+          );
         },
       ),
     );
@@ -65,7 +71,10 @@ class MemberAvatarStrip extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GestureDetector(
-      onTap: onAddPressed,
+      onTap: () {
+        AppHaptics.lightTap();
+        onAddPressed?.call();
+      },
       child: Container(
         width: 44,
         height: 44,

@@ -14,11 +14,12 @@ import '../../core/riverpod/sync_queue_provider.dart';
 import '../../core/riverpod/trip_history_provider.dart';
 import '../../core/riverpod/trip_list_provider.dart';
 import '../../core/riverpod/trip_provider.dart';
-import '../../ui_components/primary_button.dart';
+import '../../core/utils/animations.dart';
+import '../../core/utils/haptics.dart';
 import '../about/about_screen.dart';
-import '../connection/connect_screen.dart';
 import '../history/trip_history_screen.dart';
 import '../settings/settings_screen.dart';
+import '../connection/host_lobby_screen.dart';
 import 'components/activity_timeline.dart';
 import 'components/add_member_options_sheet.dart';
 import 'components/balances_list.dart';
@@ -29,6 +30,10 @@ import 'components/expenses_list.dart';
 import 'components/member_avatar_strip.dart';
 import 'components/trip_header.dart';
 import 'components/trip_nav_drawer.dart';
+import 'sheets/add_expense_sheet.dart';
+import 'sheets/add_member_sheet.dart';
+import 'sheets/edit_expense_sheet.dart';
+import 'settlement_summary_screen.dart';
 
 class TripScreen extends ConsumerStatefulWidget {
   const TripScreen({super.key});
@@ -45,6 +50,11 @@ class _TripScreenState extends ConsumerState<TripScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) {
+        setState(() {}); // Rebuild to hide/show FAB depending on tab
+      }
+    });
   }
 
   @override
@@ -137,12 +147,19 @@ class _TripScreenState extends ConsumerState<TripScreen>
             onFinishTrip: () => _confirmCloseTrip(trip),
           ),
 
-          // FAB — visible only on Expenses tab when trip is active.
-          floatingActionButton: isClosed
+          // FAB — visible only on Expenses tab (index 0) when trip is active.
+          floatingActionButton: (isClosed || _tabController.index != 0)
               ? null
-              : FloatingActionButton(
-                  onPressed: () => _showAddExpenseDialog(trip, members),
-                  child: const Icon(Icons.add),
+              : PulsingGlow(
+                  glowColor: Theme.of(context).colorScheme.primary,
+                  maxRadius: 4.0,
+                  child: FloatingActionButton(
+                    onPressed: () {
+                      AppHaptics.lightTap();
+                      _showAddExpenseSheet(trip, members);
+                    },
+                    child: const Icon(Icons.add),
+                  ),
                 ),
 
           body: isLoading
@@ -167,11 +184,18 @@ class _TripScreenState extends ConsumerState<TripScreen>
                         (status) => status != ExpenseSyncStatus.synced,
                       ),
                       canAddConnectedGuest: canAddConnectedGuest,
-                      onManageConnection: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const ConnectScreen(),
-                        ),
-                      ),
+                      onManageConnection: () {
+                        if (isHost) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const HostLobbyScreen(),
+                            ),
+                          );
+                        } else {
+                          ref.read(connectionControllerProvider.notifier).startGuestScan();
+                          _showSnack('Re-scanning for host...');
+                        }
+                      },
                       onAddConnectedGuest: () => _addConnectedGuestAsMember(
                         trip,
                         members,
@@ -224,7 +248,7 @@ class _TripScreenState extends ConsumerState<TripScreen>
                             memberIndexMap: memberIndexMap,
                             isReadOnly: isClosed || isGuestRole,
                             syncStatuses: syncStatuses,
-                            onEdit: (expense) => _showEditExpenseDialog(
+                            onEdit: (expense) => _showEditExpenseSheet(
                               trip,
                               members,
                               expense,
@@ -274,74 +298,18 @@ class _TripScreenState extends ConsumerState<TripScreen>
     await ref.read(syncQueueCountProvider.notifier).refresh();
   }
 
-  Future<void> _showAddMemberDialog(Trip trip, List<User> members) async {
+  Future<void> _showAddMemberSheet(Trip trip, List<User> members) async {
     final connectionState = ref.read(connectionControllerProvider);
     if (connectionState.role == ConnectionRole.guest) {
       _showSnack('Guest mode cannot add members');
       return;
     }
 
-    final nameController = TextEditingController();
-    final owner = members.where((user) => user.isDeviceOwner).toList();
-    if (owner.isEmpty) {
-      _showSnack('Device owner not found');
-      return;
-    }
-
-    await showDialog<void>(
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (dialogContext) {
-        bool isSaving = false;
-        return StatefulBuilder(
-          builder: (context, setState) => AlertDialog(
-            title: const Text('Add Member'),
-            content: TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Member Name'),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Cancel'),
-              ),
-              PrimaryButton(
-                label: 'Add',
-                isLoading: isSaving,
-                onPressed: () async {
-                  final name = nameController.text.trim();
-                  if (name.isEmpty) {
-                    _showSnack('Member name is required');
-                    return;
-                  }
-                  if (trip.isClosed) {
-                    _showSnack('Trip is closed');
-                    return;
-                  }
-                  setState(() => isSaving = true);
-                  final success = await ref
-                      .read(membersControllerProvider.notifier)
-                      .addMember(
-                        tripId: trip.id,
-                        name: name,
-                        managedBy: owner.first.id,
-                      );
-                  if (dialogContext.mounted) {
-                    setState(() => isSaving = false);
-                    if (success) {
-                      Navigator.of(dialogContext).pop();
-                    }
-                  }
-                  if (mounted) {
-                    _showSnack(
-                      success ? 'Member added' : 'Failed to add member',
-                    );
-                  }
-                },
-              ),
-            ],
-          ),
-        );
-      },
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => AddMemberSheet(trip: trip, members: members),
     );
   }
 
@@ -361,7 +329,7 @@ class _TripScreenState extends ConsumerState<TripScreen>
         canConnectGuest: canAddConnectedGuest,
         onAddLocalMember: () {
           Navigator.of(sheetContext).pop();
-          _showAddMemberDialog(trip, members);
+          _showAddMemberSheet(trip, members);
         },
         onConnectGuest: () {
           final guestName =
@@ -377,138 +345,17 @@ class _TripScreenState extends ConsumerState<TripScreen>
     );
   }
 
-  Future<void> _showAddExpenseDialog(Trip trip, List<User> members) async {
+  Future<void> _showAddExpenseSheet(Trip trip, List<User> members) async {
     if (members.isEmpty) {
       _showSnack('Add members before logging expenses');
       return;
     }
 
-    final nameController = TextEditingController();
-    final amountController = TextEditingController();
-    final noteController = TextEditingController();
-    String? payerId = members.first.id;
-    final selectedBeneficiaries = <String>{...members.map((m) => m.id)};
-
-    await showDialog<void>(
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (context) {
-        bool isSaving = false;
-        return StatefulBuilder(
-          builder: (context, setState) => AlertDialog(
-            title: const Text('Add Expense'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Expense Name',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: amountController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(labelText: 'Amount (₨)'),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: payerId,
-                    decoration: const InputDecoration(labelText: 'Payer'),
-                    items: members
-                        .map(
-                          (member) => DropdownMenuItem(
-                            value: member.id,
-                            child: Text(member.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() => payerId = value),
-                  ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Beneficiaries',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                  ),
-                  ...members.map(
-                    (member) => CheckboxListTile(
-                      value: selectedBeneficiaries.contains(member.id),
-                      title: Text(member.name),
-                      controlAffinity: ListTileControlAffinity.leading,
-                      onChanged: (checked) {
-                        setState(() {
-                          if (checked == true) {
-                            selectedBeneficiaries.add(member.id);
-                          } else {
-                            selectedBeneficiaries.remove(member.id);
-                          }
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: noteController,
-                    decoration: const InputDecoration(
-                      labelText: 'Note (Optional)',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              PrimaryButton(
-                label: 'Save',
-                isLoading: isSaving,
-                onPressed: () async {
-                  final expenseName = nameController.text.trim();
-                  if (expenseName.isEmpty) {
-                    _showSnack('Expense name is required');
-                    return;
-                  }
-                  final amountText = amountController.text.trim();
-                  final amount = double.tryParse(amountText) ?? 0;
-                  if (amount <= 0 || payerId == null) {
-                    _showSnack('Enter a valid amount and payer');
-                    return;
-                  }
-                  if (selectedBeneficiaries.isEmpty) {
-                    _showSnack('Select at least one beneficiary');
-                    return;
-                  }
-                  setState(() => isSaving = true);
-                  await ref
-                      .read(expensesControllerProvider.notifier)
-                      .addExpense(
-                        tripId: trip.id,
-                        payerId: payerId!,
-                        amount: amount,
-                        beneficiaryIds: selectedBeneficiaries.toList(),
-                        name: expenseName,
-                        note: noteController.text.trim().isEmpty
-                            ? null
-                            : noteController.text.trim(),
-                      );
-                  if (mounted) {
-                    Navigator.of(context).pop();
-                    _showSnack('Expense added');
-                  }
-                },
-              ),
-            ],
-          ),
-        );
-      },
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => AddExpenseSheet(trip: trip, members: members),
     );
   }
 
@@ -525,6 +372,7 @@ class _TripScreenState extends ConsumerState<TripScreen>
         .where((status) => status != ExpenseSyncStatus.synced)
         .length;
 
+    AppHaptics.warningBuzz();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -552,7 +400,13 @@ class _TripScreenState extends ConsumerState<TripScreen>
       await ref.read(membersControllerProvider.notifier).refresh();
       await ref.read(expensesControllerProvider.notifier).refresh();
       await ref.read(tripListControllerProvider.notifier).refresh();
-      _showSnack('Trip finished');
+
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => SettlementSummaryScreen(tripId: trip.id),
+        ),
+      );
     }
   }
 
@@ -608,6 +462,7 @@ class _TripScreenState extends ConsumerState<TripScreen>
       return;
     }
 
+    AppHaptics.warningBuzz();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -628,11 +483,12 @@ class _TripScreenState extends ConsumerState<TripScreen>
 
     if (confirmed == true) {
       await ref.read(tripControllerProvider.notifier).reopenTrip(trip.id);
+      AppHaptics.successBuzz();
       _showSnack('Trip reopened');
     }
   }
 
-  Future<void> _showEditExpenseDialog(
+  Future<void> _showEditExpenseSheet(
     Trip trip,
     List<User> members,
     Expense expense,
@@ -643,134 +499,15 @@ class _TripScreenState extends ConsumerState<TripScreen>
       return;
     }
 
-    final nameController = TextEditingController(text: expense.name);
-    final amountController = TextEditingController(
-      text: expense.amount.toString(),
-    );
-    final noteController = TextEditingController(text: expense.note ?? '');
-    String? payerId = expense.payerId;
-    final selectedBeneficiaries = <String>{...expense.beneficiaryIds};
-
-    await showDialog<void>(
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (context) {
-        bool isSaving = false;
-        return StatefulBuilder(
-          builder: (context, setState) => AlertDialog(
-            title: const Text('Edit Expense'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Expense Name',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: amountController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(labelText: 'Amount (₨)'),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: payerId,
-                    decoration: const InputDecoration(labelText: 'Payer'),
-                    items: members
-                        .map(
-                          (member) => DropdownMenuItem(
-                            value: member.id,
-                            child: Text(member.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() => payerId = value),
-                  ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Beneficiaries',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                  ),
-                  ...members.map(
-                    (member) => CheckboxListTile(
-                      value: selectedBeneficiaries.contains(member.id),
-                      title: Text(member.name),
-                      controlAffinity: ListTileControlAffinity.leading,
-                      onChanged: (checked) {
-                        setState(() {
-                          if (checked == true) {
-                            selectedBeneficiaries.add(member.id);
-                          } else {
-                            selectedBeneficiaries.remove(member.id);
-                          }
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: noteController,
-                    decoration: const InputDecoration(
-                      labelText: 'Note (Optional)',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              PrimaryButton(
-                label: 'Save',
-                isLoading: isSaving,
-                onPressed: () async {
-                  final expenseName = nameController.text.trim();
-                  if (expenseName.isEmpty) {
-                    _showSnack('Expense name is required');
-                    return;
-                  }
-                  final amountText = amountController.text.trim();
-                  final amount = double.tryParse(amountText) ?? 0;
-                  if (amount <= 0 || payerId == null) {
-                    _showSnack('Enter a valid amount and payer');
-                    return;
-                  }
-                  if (selectedBeneficiaries.isEmpty) {
-                    _showSnack('Select at least one beneficiary');
-                    return;
-                  }
-                  setState(() => isSaving = true);
-                  await ref
-                      .read(expensesControllerProvider.notifier)
-                      .updateExpense(
-                        expenseId: expense.id,
-                        name: expenseName,
-                        amount: amount,
-                        payerId: payerId!,
-                        beneficiaryIds: selectedBeneficiaries.toList(),
-                        note: noteController.text.trim().isEmpty
-                            ? null
-                            : noteController.text.trim(),
-                      );
-                  if (mounted) {
-                    Navigator.of(context).pop();
-                    _showSnack('Expense updated');
-                  }
-                },
-              ),
-            ],
-          ),
-        );
-      },
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => EditExpenseSheet(
+        trip: trip,
+        members: members,
+        expense: expense,
+      ),
     );
   }
 
@@ -781,6 +518,7 @@ class _TripScreenState extends ConsumerState<TripScreen>
       return;
     }
 
+    AppHaptics.warningBuzz();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(

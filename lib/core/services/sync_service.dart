@@ -95,7 +95,15 @@ class SyncService {
     required String tripId,
     required List<Expense> expenses,
   }) async {
-    final payload = SyncLedgerPayload(tripId: tripId, expenses: expenses);
+    final trip = await _storage.getTrip(tripId);
+    final members = trip != null ? await _storage.getUsersByIds(trip.memberIds) : null;
+
+    final payload = SyncLedgerPayload(
+      tripId: tripId,
+      tripTitle: trip?.title,
+      expenses: expenses,
+      members: members,
+    );
     final envelope = SyncEnvelope.create(
       type: SyncMessageType.syncLedger,
       payload: payload.toJson(),
@@ -211,6 +219,8 @@ class SyncService {
       await _storage.replaceTripExpensesFromSync(
         tripId: payload.tripId,
         expenses: payload.expenses,
+        tripTitle: payload.tripTitle,
+        members: payload.members,
       );
       _eventController.add(
         SyncEvent(type: SyncEventType.ledgerAppliedOnGuest, envelope: envelope),

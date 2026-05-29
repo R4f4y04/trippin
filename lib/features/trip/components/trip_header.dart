@@ -42,40 +42,102 @@ class TripHeader extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // Total spent card
+          // Glassmorphic Total Spent Card
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: colorScheme.primary.withValues(alpha: 0.15),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                  colorScheme.surface.withValues(alpha: 0.75),
+                ],
               ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: colorScheme.primary.withValues(alpha: 0.25),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.primary.withValues(alpha: 0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Total Spent',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'TOTAL SPENT',
+                      style: textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurface.withValues(alpha: 0.6),
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    Icon(
+                      Icons.receipt_long_rounded,
+                      size: 16,
+                      color: colorScheme.primary.withValues(alpha: 0.7),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  formatPKR(totalSpent),
-                  style: textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                const SizedBox(height: 8),
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0.0, end: totalSpent),
+                  duration: const Duration(milliseconds: 1200),
+                  curve: Curves.easeOutExpo,
+                  builder: (context, value, child) {
+                    return Text(
+                      formatPKR(value),
+                      style: textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.5,
+                        color: colorScheme.onSurface,
+                      ),
+                    );
+                  },
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'Your balance: $balancePrefix${formatPKR(personalBalance.abs())}',
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: balanceColor,
-                    fontWeight: FontWeight.w600,
-                  ),
+                const SizedBox(height: 10),
+                Divider(
+                  color: colorScheme.onSurface.withValues(alpha: 0.08),
+                  height: 1,
+                ),
+                const SizedBox(height: 10),
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0.0, end: personalBalance.abs()),
+                  duration: const Duration(milliseconds: 1200),
+                  curve: Curves.easeOutExpo,
+                  builder: (context, value, child) {
+                    return Row(
+                      children: [
+                        Icon(
+                          personalBalance >= 0
+                              ? Icons.arrow_upward_rounded
+                              : Icons.arrow_downward_rounded,
+                          size: 14,
+                          color: balanceColor,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            'Your balance: $balancePrefix${formatPKR(value)}',
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: balanceColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
