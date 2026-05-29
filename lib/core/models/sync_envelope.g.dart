@@ -26,4 +26,5 @@ const _$SyncMessageTypeEnumMap = {
   SyncMessageType.addExpense: 'ADD_EXPENSE',
   SyncMessageType.syncLedger: 'SYNC_LEDGER',
   SyncMessageType.heartbeat: 'HEARTBEAT',
+  SyncMessageType.finishTrip: 'FINISH_TRIP',
 };

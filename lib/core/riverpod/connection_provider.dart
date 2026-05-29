@@ -9,6 +9,7 @@ import '../models/sync_payloads.dart';
 import 'expenses_provider.dart';
 import 'expense_sync_status_provider.dart';
 import 'sync_queue_provider.dart';
+import 'trip_provider.dart';
 import '../services/p2p_service.dart';
 import '../services/permissions_service.dart';
 import '../services/storage_service.dart';
@@ -392,8 +393,13 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
       case SyncEventType.envelopeSent:
       case SyncEventType.invalidEnvelope:
       case SyncEventType.queueFlushed:
+      case SyncEventType.finishTripReceived:
         if (event.type == SyncEventType.queueFlushed) {
           unawaited(ref.read(syncQueueCountProvider.notifier).refresh());
+        }
+        if (event.type == SyncEventType.finishTripReceived) {
+          unawaited(ref.read(tripControllerProvider.notifier).refresh());
+          unawaited(ref.read(expensesControllerProvider.notifier).refresh());
         }
         break;
     }

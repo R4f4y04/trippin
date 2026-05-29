@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/models/settlement.dart';
+import '../../../core/services/settlement_service.dart';
 import '../../../core/utils/currency_format.dart';
 import '../../../core/utils/member_colors.dart';
 
-/// Visual balance bars showing each member's net position.
+/// Visual balance bars showing each member's net position,
+/// followed by real-time optimized simplified peer settlements.
 ///
 /// Positive balances (owed money) show green bars extending right.
 /// Negative balances (owes money) show red bars extending left.
@@ -61,13 +64,15 @@ class BalancesList extends StatelessWidget {
     final maxAbs =
         entries.map((e) => e.value.abs()).reduce((a, b) => a > b ? a : b);
 
+    final settlements = SettlementService.instance.calculateSettlements(balances);
+
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      itemCount: entries.length + 1, // +1 for settlement placeholder
+      itemCount: entries.length + 1, // +1 for settlement section
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         if (index == entries.length) {
-          return _buildSettlementPlaceholder(context);
+          return _buildSettlementsSection(context, settlements);
         }
         final entry = entries[index];
         return _buildBalanceBar(context, entry.key, entry.value, maxAbs);
@@ -150,28 +155,127 @@ class BalancesList extends StatelessWidget {
     );
   }
 
-  Widget _buildSettlementPlaceholder(BuildContext context) {
+  Widget _buildSettlementsSection(BuildContext context, List<Settlement> settlements) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Padding(
       padding: const EdgeInsets.only(top: 16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Divider(color: colorScheme.onSurface.withValues(alpha: 0.1)),
+          Divider(color: colorScheme.outline.withValues(alpha: 0.1)),
           const SizedBox(height: 12),
           Text(
             'Simplified Settlements',
-            style: textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w600,
+            style: textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
-            'Settlement breakdown will appear here when the trip is finished.',
-            textAlign: TextAlign.center,
+            settlements.isEmpty
+                ? 'Everyone is fully settled up! 🎉'
+                : '${settlements.length} transfer${settlements.length > 1 ? "s" : ""} to settle up.',
             style: textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurface.withValues(alpha: 0.5),
+              color: colorScheme.outline,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (settlements.isNotEmpty)
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: settlements.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final s = settlements[index];
+                return _buildSettlementRow(context, s);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettlementRow(BuildContext context, Settlement settlement) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    final fromName = memberMap[settlement.fromId] ?? 'Unknown';
+    final toName = memberMap[settlement.toId] ?? 'Unknown';
+
+    final fromIdx = memberIndexMap[settlement.fromId] ?? 0;
+    final toIdx = memberIndexMap[settlement.toId] ?? 0;
+
+    final fromColor = getMemberColor(fromIdx);
+    final toColor = getMemberColor(toIdx);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.outline.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Debtor Avatar + Name
+          CircleAvatar(
+            radius: 12,
+            backgroundColor: fromColor.withValues(alpha: 0.15),
+            child: Text(
+              fromName.isNotEmpty ? fromName[0].toUpperCase() : '?',
+              style: TextStyle(color: fromColor, fontSize: 10, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              fromName,
+              style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+
+          // Arrow and Amount Transfer
+          Column(
+            children: [
+              Text(
+                formatPKR(settlement.amount),
+                style: textTheme.labelSmall?.copyWith(
+                  color: colorScheme.secondary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Icon(
+                Icons.trending_flat_rounded,
+                color: colorScheme.secondary,
+                size: 16,
+              ),
+            ],
+          ),
+
+          // Creditor Avatar + Name
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              toName,
+              style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          CircleAvatar(
+            radius: 12,
+            backgroundColor: toColor.withValues(alpha: 0.15),
+            child: Text(
+              toName.isNotEmpty ? toName[0].toUpperCase() : '?',
+              style: TextStyle(color: toColor, fontSize: 10, fontWeight: FontWeight.bold),
             ),
           ),
         ],

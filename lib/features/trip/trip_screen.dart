@@ -14,6 +14,7 @@ import '../../core/riverpod/sync_queue_provider.dart';
 import '../../core/riverpod/trip_history_provider.dart';
 import '../../core/riverpod/trip_list_provider.dart';
 import '../../core/riverpod/trip_provider.dart';
+import '../../core/services/sync_service.dart';
 import '../../core/utils/animations.dart';
 import '../../core/utils/haptics.dart';
 import '../about/about_screen.dart';
@@ -65,6 +66,21 @@ class _TripScreenState extends ConsumerState<TripScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AsyncValue<Trip?>>(tripControllerProvider, (previous, next) {
+      final prevTrip = previous?.valueOrNull;
+      final nextTrip = next.valueOrNull;
+      if (prevTrip != null && nextTrip != null) {
+        if (!prevTrip.isClosed && nextTrip.isClosed) {
+          // Transition both host and guest seamlessly when trip finishes
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => SettlementSummaryScreen(tripId: nextTrip.id),
+            ),
+          );
+        }
+      }
+    });
+
     final tripAsync = ref.watch(tripControllerProvider);
     final membersAsync = ref.watch(membersControllerProvider);
     final expensesAsync = ref.watch(expensesControllerProvider);
@@ -396,6 +412,12 @@ class _TripScreenState extends ConsumerState<TripScreen>
     );
 
     if (confirmed == true) {
+      // Broadcast end trip protocol to all connected guests
+      final connectionState = ref.read(connectionControllerProvider);
+      if (connectionState.isConnected) {
+        await SyncService.instance.sendFinishTrip(tripId: trip.id);
+      }
+
       await ref.read(tripControllerProvider.notifier).closeTrip(trip.id);
       await ref.read(membersControllerProvider.notifier).refresh();
       await ref.read(expensesControllerProvider.notifier).refresh();

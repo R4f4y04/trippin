@@ -16,6 +16,7 @@ enum SyncEventType {
   expenseMergedOnHost,
   ledgerAppliedOnGuest,
   queueFlushed,
+  finishTripReceived,
 }
 
 class SyncEvent {
@@ -116,6 +117,14 @@ class SyncService {
     final envelope = SyncEnvelope.create(
       type: SyncMessageType.heartbeat,
       payload: payload.toJson(),
+    );
+    await _sendEnvelope(envelope);
+  }
+
+  Future<void> sendFinishTrip({required String tripId}) async {
+    final envelope = SyncEnvelope.create(
+      type: SyncMessageType.finishTrip,
+      payload: {'tripId': tripId},
     );
     await _sendEnvelope(envelope);
   }
@@ -224,6 +233,15 @@ class SyncService {
       );
       _eventController.add(
         SyncEvent(type: SyncEventType.ledgerAppliedOnGuest, envelope: envelope),
+      );
+      return;
+    }
+
+    if (role == SyncRole.guest && envelope.type == SyncMessageType.finishTrip) {
+      final tripId = envelope.payload['tripId'] as String;
+      await _storage.closeTrip(tripId: tripId);
+      _eventController.add(
+        SyncEvent(type: SyncEventType.finishTripReceived, envelope: envelope),
       );
       return;
     }
