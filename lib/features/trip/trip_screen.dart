@@ -11,6 +11,7 @@ import '../../core/riverpod/expense_sync_status_provider.dart';
 import '../../core/riverpod/expenses_provider.dart';
 import '../../core/riverpod/members_provider.dart';
 import '../../core/riverpod/sync_queue_provider.dart';
+import '../../core/riverpod/trip_history_provider.dart';
 import '../../core/riverpod/trip_list_provider.dart';
 import '../../core/riverpod/trip_provider.dart';
 import '../../ui_components/primary_button.dart';
@@ -18,16 +19,16 @@ import '../about/about_screen.dart';
 import '../connection/connect_screen.dart';
 import '../history/trip_history_screen.dart';
 import '../settings/settings_screen.dart';
+import 'components/activity_timeline.dart';
 import 'components/add_member_options_sheet.dart';
 import 'components/balances_list.dart';
 import 'components/closed_banner.dart';
 import 'components/connection_status_banner.dart';
 import 'components/error_state.dart';
 import 'components/expenses_list.dart';
-import 'components/members_list.dart';
-import 'components/section_card.dart';
+import 'components/member_avatar_strip.dart';
+import 'components/trip_header.dart';
 import 'components/trip_nav_drawer.dart';
-import 'components/trip_summary_card.dart';
 
 class TripScreen extends ConsumerStatefulWidget {
   const TripScreen({super.key});
@@ -36,7 +37,22 @@ class TripScreen extends ConsumerStatefulWidget {
   ConsumerState<TripScreen> createState() => _TripScreenState();
 }
 
-class _TripScreenState extends ConsumerState<TripScreen> {
+class _TripScreenState extends ConsumerState<TripScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final tripAsync = ref.watch(tripControllerProvider);
@@ -71,8 +87,12 @@ class _TripScreenState extends ConsumerState<TripScreen> {
         final expenses = expensesAsync.value ?? [];
         final isClosed = trip.isClosed;
         final isGuestRole = connectionState.role == ConnectionRole.guest;
+        final isHost = !isGuestRole;
         final memberMap = {
           for (final member in members) member.id: member.name,
+        };
+        final memberIndexMap = {
+          for (var i = 0; i < members.length; i++) members[i].id: i,
         };
         final canAddConnectedGuest =
             connectionState.role == ConnectionRole.host &&
@@ -80,15 +100,19 @@ class _TripScreenState extends ConsumerState<TripScreen> {
             connectionState.selectedDevice != null &&
             !isClosed;
 
-        final isHost = !isGuestRole;
         final isLoading = membersAsync.isLoading || expensesAsync.isLoading;
+
+        // Calculate totals for the header.
+        final totalSpent =
+            expenses.fold<double>(0.0, (sum, e) => sum + e.amount);
+        final owner =
+            members.where((m) => m.isDeviceOwner).toList();
+        final personalBalance =
+            owner.isNotEmpty ? (balances[owner.first.id] ?? 0.0) : 0.0;
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(
-              trip.title,
-              overflow: TextOverflow.ellipsis,
-            ),
+            title: Text(trip.title, overflow: TextOverflow.ellipsis),
             actions: [
               IconButton(
                 tooltip: 'Refresh',
@@ -112,118 +136,136 @@ class _TripScreenState extends ConsumerState<TripScreen> {
             ),
             onFinishTrip: () => _confirmCloseTrip(trip),
           ),
+
+          // FAB — visible only on Expenses tab when trip is active.
+          floatingActionButton: isClosed
+              ? null
+              : FloatingActionButton(
+                  onPressed: () => _showAddExpenseDialog(trip, members),
+                  child: const Icon(Icons.add),
+                ),
+
           body: isLoading
               ? const Center(child: CircularProgressIndicator())
-              : RefreshIndicator(
-                  onRefresh: _refreshAll,
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      if (isClosed) ...[
-                        ClosedBanner(
-                          onReopen: isGuestRole
-                              ? () => _showSnack(
-                                  'Guest mode cannot reopen trip in this phase',
-                                )
-                              : () => _confirmReopenTrip(trip),
+              : Column(
+                  children: [
+                    // — Closed banner —
+                    if (isClosed)
+                      ClosedBanner(
+                        onReopen: isGuestRole
+                            ? () => _showSnack(
+                                'Guest mode cannot reopen trip',
+                              )
+                            : () => _confirmReopenTrip(trip),
+                      ),
+
+                    // — Connection status strip —
+                    ConnectionStatusBanner(
+                      connectionState: connectionState,
+                      queuedCount: queuedCountAsync.valueOrNull,
+                      hasUnsyncedItems: syncStatuses.values.any(
+                        (status) => status != ExpenseSyncStatus.synced,
+                      ),
+                      canAddConnectedGuest: canAddConnectedGuest,
+                      onManageConnection: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ConnectScreen(),
                         ),
-                        const SizedBox(height: 12),
+                      ),
+                      onAddConnectedGuest: () => _addConnectedGuestAsMember(
+                        trip,
+                        members,
+                        connectionState.selectedDevice?.displayName ?? '',
+                      ),
+                    ),
+
+                    // — Trip header —
+                    TripHeader(
+                      trip: trip,
+                      memberCount: members.length,
+                      totalSpent: totalSpent,
+                      personalBalance: personalBalance,
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    // — Member avatar strip —
+                    MemberAvatarStrip(
+                      members: members,
+                      showAddButton: isHost && !isClosed,
+                      onAddPressed: () => _showAddMemberOptions(
+                        trip,
+                        members,
+                        canAddConnectedGuest,
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // — Tab bar —
+                    TabBar(
+                      controller: _tabController,
+                      tabs: const [
+                        Tab(text: 'Expenses'),
+                        Tab(text: 'Balances'),
+                        Tab(text: 'Activity'),
                       ],
-                      TripSummaryCard(trip: trip, memberCount: members.length),
-                      const SizedBox(height: 12),
-                      ConnectionStatusBanner(
-                        connectionState: connectionState,
-                        queuedCount: queuedCountAsync.valueOrNull,
-                        hasUnsyncedItems: syncStatuses.values.any(
-                          (status) => status != ExpenseSyncStatus.synced,
-                        ),
-                        canAddConnectedGuest: canAddConnectedGuest,
-                        onManageConnection: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const ConnectScreen(),
+                    ),
+
+                    // — Tab content —
+                    Expanded(
+                      child: TabBarView(
+                        controller: _tabController,
+                        children: [
+                          // Tab 0: Expenses
+                          ExpensesList(
+                            expenses: expenses,
+                            memberMap: memberMap,
+                            memberIndexMap: memberIndexMap,
+                            isReadOnly: isClosed || isGuestRole,
+                            syncStatuses: syncStatuses,
+                            onEdit: (expense) => _showEditExpenseDialog(
+                              trip,
+                              members,
+                              expense,
+                            ),
+                            onDelete: _confirmDeleteExpense,
                           ),
-                        ),
-                        onAddConnectedGuest: () => _addConnectedGuestAsMember(
-                          trip,
-                          members,
-                          connectionState.selectedDevice?.displayName ?? '',
-                        ),
+
+                          // Tab 1: Balances
+                          BalancesList(
+                            balances: balances,
+                            memberMap: memberMap,
+                            memberIndexMap: memberIndexMap,
+                          ),
+
+                          // Tab 2: Activity
+                          _buildActivityTab(trip),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      SectionCard(
-                        title: 'Members',
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            MembersList(members: members),
-                            const SizedBox(height: 12),
-                            PrimaryButton(
-                              label: 'Add Member',
-                              onPressed: isClosed || isGuestRole
-                                  ? null
-                                  : () => _showAddMemberOptions(
-                                      trip,
-                                      members,
-                                      canAddConnectedGuest,
-                                    ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      SectionCard(
-                        title: 'Expenses',
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ExpensesList(
-                              expenses: expenses,
-                              memberMap: memberMap,
-                              isReadOnly: isClosed || isGuestRole,
-                              syncStatuses: syncStatuses,
-                              onEdit: (expense) => _showEditExpenseDialog(
-                                trip,
-                                members,
-                                expense,
-                              ),
-                              onDelete: _confirmDeleteExpense,
-                            ),
-                            const SizedBox(height: 12),
-                            PrimaryButton(
-                              label: 'Add Expense',
-                              onPressed: isClosed
-                                  ? null
-                                  : () => _showAddExpenseDialog(trip, members),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      SectionCard(
-                        title: 'Balances',
-                        child: BalancesList(
-                          balances: balances,
-                          memberMap: memberMap,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      SectionCard(
-                        title: 'Trip Actions',
-                        child: PrimaryButton(
-                          label: isClosed ? 'Trip Finished' : 'Finish Trip',
-                          onPressed: isClosed || isGuestRole
-                              ? null
-                              : () => _confirmCloseTrip(trip),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
         );
       },
     );
   }
+
+  Widget _buildActivityTab(Trip trip) {
+    final historyAsync = ref.watch(
+      tripHistoryControllerProvider(trip.id),
+    );
+
+    return historyAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, __) => const Center(child: Text('Failed to load activity')),
+      data: (events) => ActivityTimeline(events: events),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // Action methods (preserved from original)
+  // ─────────────────────────────────────────────────────────
 
   Future<void> _refreshAll() async {
     await ref.read(tripControllerProvider.notifier).refresh();
@@ -235,7 +277,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
   Future<void> _showAddMemberDialog(Trip trip, List<User> members) async {
     final connectionState = ref.read(connectionControllerProvider);
     if (connectionState.role == ConnectionRole.guest) {
-      _showSnack('Guest mode cannot add members in this phase');
+      _showSnack('Guest mode cannot add members');
       return;
     }
 
@@ -370,7 +412,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(labelText: 'Amount'),
+                    decoration: const InputDecoration(labelText: 'Amount (₨)'),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -473,7 +515,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
   Future<void> _confirmCloseTrip(Trip trip) async {
     final connectionState = ref.read(connectionControllerProvider);
     if (connectionState.role == ConnectionRole.guest) {
-      _showSnack('Guest mode cannot finish trip in this phase');
+      _showSnack('Guest mode cannot finish trip');
       return;
     }
 
@@ -562,7 +604,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
   Future<void> _confirmReopenTrip(Trip trip) async {
     final connectionState = ref.read(connectionControllerProvider);
     if (connectionState.role == ConnectionRole.guest) {
-      _showSnack('Guest mode cannot reopen trip in this phase');
+      _showSnack('Guest mode cannot reopen trip');
       return;
     }
 
@@ -597,7 +639,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
   ) async {
     final connectionState = ref.read(connectionControllerProvider);
     if (connectionState.role == ConnectionRole.guest) {
-      _showSnack('Guest mode cannot edit expenses in this phase');
+      _showSnack('Guest mode cannot edit expenses');
       return;
     }
 
@@ -632,7 +674,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(labelText: 'Amount'),
+                    decoration: const InputDecoration(labelText: 'Amount (₨)'),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -735,7 +777,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
   Future<void> _confirmDeleteExpense(Expense expense) async {
     final connectionState = ref.read(connectionControllerProvider);
     if (connectionState.role == ConnectionRole.guest) {
-      _showSnack('Guest mode cannot delete expenses in this phase');
+      _showSnack('Guest mode cannot delete expenses');
       return;
     }
 

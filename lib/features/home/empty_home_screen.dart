@@ -42,7 +42,7 @@ class EmptyHomeScreen extends StatelessWidget {
               'Split bills, not friendships.',
               textAlign: TextAlign.center,
               style: textTheme.titleMedium?.copyWith(
-                color: colorScheme.onSurface.withOpacity(0.7),
+                color: colorScheme.onSurface.withValues(alpha: 0.7),
               ),
             ),
             const SizedBox(height: 32),
@@ -60,21 +60,21 @@ class EmptyHomeScreen extends StatelessWidget {
                 Container(
                   width: 40,
                   height: 1,
-                  color: colorScheme.onSurface.withOpacity(0.2),
+                  color: colorScheme.onSurface.withValues(alpha: 0.2),
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Text(
                     'or',
                     style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withOpacity(0.4),
+                      color: colorScheme.onSurface.withValues(alpha: 0.4),
                     ),
                   ),
                 ),
                 Container(
                   width: 40,
                   height: 1,
-                  color: colorScheme.onSurface.withOpacity(0.2),
+                  color: colorScheme.onSurface.withValues(alpha: 0.2),
                 ),
               ],
             ),
@@ -105,7 +105,7 @@ class EmptyHomeScreen extends StatelessWidget {
             Text(
               'Works offline. No sign-up needed.',
               style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurface.withOpacity(0.35),
+                color: colorScheme.onSurface.withValues(alpha: 0.35),
               ),
             ),
           ],
