@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/riverpod/expenses_provider.dart';
 import '../../core/riverpod/members_provider.dart';
+import '../../core/riverpod/profile_provider.dart';
 import '../../core/riverpod/trip_provider.dart';
 import '../../ui_components/primary_button.dart';
 
@@ -19,6 +20,20 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen> {
   bool _isCreating = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Auto-fill the owner name from the saved profile.
+    _loadSavedName();
+  }
+
+  Future<void> _loadSavedName() async {
+    final savedName = await ref.read(savedNameProvider.future);
+    if (savedName != null && savedName.isNotEmpty && mounted) {
+      _ownerNameController.text = savedName;
+    }
+  }
+
+  @override
   void dispose() {
     _tripNameController.dispose();
     _ownerNameController.dispose();
@@ -27,28 +42,78 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Start Trip as Host')),
+      appBar: AppBar(title: const Text('Start a Trip')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         children: [
-          Text(
-            'Create your trip and become the host. As host, you control the lobby, canonical sync, and trip closure.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+
+          // — Trip name section —
+          Text('Name your adventure', style: textTheme.bodySmall),
+          const SizedBox(height: 8),
           TextField(
             controller: _tripNameController,
-            decoration: const InputDecoration(labelText: 'Trip Name'),
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Trip Name',
+              hintText: 'e.g. "Khanpur Dam Weekend"',
+            ),
           ),
-          const SizedBox(height: 12),
+
+          const SizedBox(height: 24),
+
+          // — Owner name section —
+          Text('What should we call you?', style: textTheme.bodySmall),
+          const SizedBox(height: 8),
           TextField(
             controller: _ownerNameController,
-            decoration: const InputDecoration(labelText: 'Your Name'),
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Your Name',
+              hintText: 'e.g. "Rafay"',
+            ),
           ),
-          const SizedBox(height: 20),
+
+          const SizedBox(height: 24),
+
+          // — Info card —
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: colorScheme.primary.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.lightbulb_outline,
+                  color: colorScheme.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "You'll be the host. You can add members and manage expenses once the trip is created.",
+                    style: textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // — Create button —
           PrimaryButton(
-            label: 'Create Trip',
+            label: "Let's Go! 🚀",
             isLoading: _isCreating,
             onPressed: _isCreating ? null : _createTrip,
           ),

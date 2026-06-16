@@ -6,7 +6,7 @@ import 'package:uuid/uuid.dart';
 part 'sync_envelope.g.dart';
 
 @JsonEnum(fieldRename: FieldRename.screamingSnake)
-enum SyncMessageType { handshake, addExpense, syncLedger, heartbeat }
+enum SyncMessageType { handshake, addExpense, syncLedger, heartbeat, finishTrip }
 
 @JsonSerializable()
 class SyncEnvelope {

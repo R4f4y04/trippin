@@ -2,6 +2,10 @@
 
 part of 'expense_revision.dart';
 
+// **************************************************************************
+// JsonSerializableGenerator
+// **************************************************************************
+
 ExpenseRevision _$ExpenseRevisionFromJson(Map<String, dynamic> json) =>
     ExpenseRevision(
       id: json['id'] as String,
@@ -11,8 +15,9 @@ ExpenseRevision _$ExpenseRevisionFromJson(Map<String, dynamic> json) =>
       previousAmount: (json['previousAmount'] as num).toDouble(),
       previousName: json['previousName'] as String,
       previousPayerId: json['previousPayerId'] as String,
-      previousBeneficiaryIds:
-          (json['previousBeneficiaryIds'] as List<dynamic>).cast<String>(),
+      previousBeneficiaryIds: (json['previousBeneficiaryIds'] as List<dynamic>)
+          .map((e) => e as String)
+          .toList(),
       previousNote: json['previousNote'] as String?,
       createdAt: DateTime.parse(json['createdAt'] as String),
     );

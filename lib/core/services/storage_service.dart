@@ -100,6 +100,29 @@ class StorageService {
     return _syncQueueBox!;
   }
 
+  Future<void> clearAllData() async {
+    final usersBox = await _openUsersBox();
+    final tripsBox = await _openTripsBox();
+    final expensesBox = await _openExpensesBox();
+    final revisionsBox = await _openExpenseRevisionsBox();
+    final historyBox = await _openTripHistoryBox();
+    final queueBox = await _openSyncQueueBox();
+
+    await safeExecute(
+      operation: () async {
+        await usersBox.clear();
+        await tripsBox.clear();
+        await expensesBox.clear();
+        await revisionsBox.clear();
+        await historyBox.clear();
+        await queueBox.clear();
+      },
+      onError: (error, stackTrace) {
+        AppLogger.error('Failed to clear storage data', error, stackTrace);
+      },
+    );
+  }
+
   Future<void> enqueueSyncEnvelope(SyncEnvelope envelope) async {
     final box = await _openSyncQueueBox();
     await safeExecute(
@@ -180,6 +203,20 @@ class StorageService {
       return box.values.firstWhere((user) => user.isDeviceOwner);
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<User> setOrCreateDeviceOwner({required String name}) async {
+    final box = await _openUsersBox();
+    final existing = await getDeviceOwner();
+    if (existing != null) {
+      final updated = existing.copyWith(name: name);
+      await box.put(updated.id, updated);
+      return updated;
+    } else {
+      final owner = User.createDeviceOwner(name: name);
+      await box.put(owner.id, owner);
+      return owner;
     }
   }
 
@@ -413,18 +450,35 @@ class StorageService {
   Future<void> replaceTripExpensesFromSync({
     required String tripId,
     required List<Expense> expenses,
+    String? tripTitle,
+    List<User>? members,
   }) async {
-    final trip = await getTrip(tripId);
-    if (trip == null) {
-      AppLogger.warning('Received synced ledger for missing trip.');
-      return;
-    }
-
-    final expensesBox = await _openExpensesBox();
     final tripsBox = await _openTripsBox();
+    final expensesBox = await _openExpensesBox();
+    final usersBox = await _openUsersBox();
+
+    var trip = await getTrip(tripId);
 
     await safeExecute(
       operation: () async {
+        if (members != null) {
+          for (final member in members) {
+            await usersBox.put(member.id, member);
+          }
+        }
+
+        if (trip == null) {
+          trip = Trip.create(title: tripTitle ?? 'Synced Trip').copyWith(
+            id: tripId,
+            deviceRole: 'guest',
+            memberIds: members?.map((m) => m.id).toList() ?? [],
+          );
+        } else if (members != null) {
+          trip = trip!.copyWith(
+            memberIds: members.map((m) => m.id).toList(),
+          );
+        }
+
         final existing = await getExpensesByTrip(tripId);
         for (final expense in existing) {
           await expensesBox.delete(expense.id);
@@ -434,7 +488,7 @@ class StorageService {
           await expensesBox.put(expense.id, expense);
         }
 
-        final updatedTrip = trip.copyWith(
+        final updatedTrip = trip!.copyWith(
           expenseIds: expenses.map((item) => item.id).toList(),
           lastModifiedAt: DateTime.now(),
         );
@@ -442,6 +496,27 @@ class StorageService {
       },
       onError: (error, stackTrace) {
         AppLogger.error('Failed to apply synced ledger', error, stackTrace);
+      },
+    );
+  }
+
+  /// Updates lightweight trip metadata (e.g. deviceRole) without
+  /// triggering history events.
+  Future<void> updateTripMeta({
+    required String tripId,
+    String? deviceRole,
+  }) async {
+    final trip = await getTrip(tripId);
+    if (trip == null) return;
+
+    final updated = trip.copyWith(deviceRole: deviceRole);
+    await safeExecute(
+      operation: () async {
+        final tripsBox = await _openTripsBox();
+        await tripsBox.put(updated.id, updated);
+      },
+      onError: (error, stackTrace) {
+        AppLogger.error('Failed to update trip meta', error, stackTrace);
       },
     );
   }

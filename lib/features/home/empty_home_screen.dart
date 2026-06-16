@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-
+import '../../core/utils/animations.dart';
+import '../../core/utils/haptics.dart';
 import '../../ui_components/primary_button.dart';
 import 'components/action_pill.dart';
 
@@ -9,7 +10,6 @@ class EmptyHomeScreen extends StatelessWidget {
   final VoidCallback onOpenHistory;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenAbout;
-  final VoidCallback onCreateSampleTrip;
 
   const EmptyHomeScreen({
     super.key,
@@ -18,7 +18,6 @@ class EmptyHomeScreen extends StatelessWidget {
     required this.onOpenHistory,
     required this.onOpenSettings,
     required this.onOpenAbout,
-    required this.onCreateSampleTrip,
   });
 
   @override
@@ -32,33 +31,82 @@ class EmptyHomeScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Styled logo with subtle breathing glow
+            PulsingGlow(
+              glowColor: colorScheme.primary,
+              maxRadius: 6.0,
+              child: Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: colorScheme.primaryContainer.withValues(alpha: 0.2),
+                  border: Border.all(color: colorScheme.primary, width: 2.0),
+                ),
+                child: Icon(
+                  Icons.explore_rounded,
+                  size: 40,
+                  color: colorScheme.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
             Text(
               'Trippin',
               style: textTheme.displaySmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
+                letterSpacing: 1.5,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Offline-first expense splitting.',
+              'Split bills, not friendships.',
               textAlign: TextAlign.center,
               style: textTheme.titleMedium?.copyWith(
                 color: colorScheme.onSurface.withValues(alpha: 0.8),
               ),
             ),
-            const SizedBox(height: 24),
-            PrimaryButton(label: 'Start Trip as Host', onPressed: onStartTrip),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: onJoinTrip,
-              icon: const Icon(Icons.group_add_outlined),
-              label: const Text('Join a Trip as Guest'),
+            const SizedBox(height: 36),
+            PrimaryButton(
+              label: 'Start a Trip',
+              onPressed: () {
+                AppHaptics.lightTap();
+                onStartTrip();
+              },
             ),
             const SizedBox(height: 12),
-            TextButton(
-              onPressed: onCreateSampleTrip,
-              child: const Text('Create sample trip'),
+            OutlinedButton.icon(
+              onPressed: () {
+                AppHaptics.lightTap();
+                onJoinTrip();
+              },
+              icon: const Icon(Icons.group_add_outlined),
+              label: const Text('Join a Trip'),
+            ),
+            const SizedBox(height: 32),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 40,
+                  height: 1,
+                  color: colorScheme.onSurface.withValues(alpha: 0.2),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    'or',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurface.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 40,
+                  height: 1,
+                  color: colorScheme.onSurface.withValues(alpha: 0.2),
+                ),
+              ],
             ),
             const SizedBox(height: 24),
             Wrap(
@@ -69,19 +117,35 @@ class EmptyHomeScreen extends StatelessWidget {
                 ActionPill(
                   label: 'History',
                   icon: Icons.history,
-                  onPressed: onOpenHistory,
+                  onPressed: () {
+                    AppHaptics.lightTap();
+                    onOpenHistory();
+                  },
                 ),
                 ActionPill(
                   label: 'Settings',
                   icon: Icons.settings,
-                  onPressed: onOpenSettings,
+                  onPressed: () {
+                    AppHaptics.lightTap();
+                    onOpenSettings();
+                  },
                 ),
                 ActionPill(
                   label: 'About',
                   icon: Icons.info_outline,
-                  onPressed: onOpenAbout,
+                  onPressed: () {
+                    AppHaptics.lightTap();
+                    onOpenAbout();
+                  },
                 ),
               ],
+            ),
+            const SizedBox(height: 40),
+            Text(
+              'Works offline. No sign-up needed.',
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurface.withValues(alpha: 0.35),
+              ),
             ),
           ],
         ),

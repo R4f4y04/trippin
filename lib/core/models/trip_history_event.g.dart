@@ -2,6 +2,10 @@
 
 part of 'trip_history_event.dart';
 
+// **************************************************************************
+// JsonSerializableGenerator
+// **************************************************************************
+
 TripHistoryEvent _$TripHistoryEventFromJson(Map<String, dynamic> json) =>
     TripHistoryEvent(
       id: json['id'] as String,

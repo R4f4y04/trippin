@@ -4,9 +4,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/connection_state.dart';
+import '../../core/models/connection_state.dart';
 import '../../core/models/discovered_device.dart';
 import '../../core/riverpod/connection_provider.dart';
+import '../../core/riverpod/profile_provider.dart';
+import '../../core/riverpod/trip_provider.dart';
+import '../../core/services/storage_service.dart';
+import '../../ui_components/primary_button.dart';
 
+/// Redesigned Join Trip Entry Screen for guests.
+///
+/// Features:
+/// - "What should we call you?" Name input auto-filled from ProfileService
+/// - Discovered hosts represented as modern styled cards with signal strength
+/// - Empty state with friendly troubleshooting tips
+/// - Progress dialogs / loading overlays for connection requests
+/// - Automatic persistence of name/deviceRole and navigation to TripScreen upon successful sync
 class JoinTripEntryScreen extends ConsumerStatefulWidget {
   const JoinTripEntryScreen({super.key});
 
@@ -80,17 +93,40 @@ class _JoinTripEntryScreenState extends ConsumerState<JoinTripEntryScreen> {
         state.errorMessage != null && state.errorMessage!.isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Join Trip as Guest')),
+      appBar: AppBar(title: const Text('Join a Trip')),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // — User Name Section —
             Text(
-              'Find nearby hosts and join a trip lobby. Keep Bluetooth and Location enabled.',
-              style: Theme.of(context).textTheme.bodyMedium,
+              'What should we call you?',
+              style: textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: colorScheme.primary,
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _nameController,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Your Name',
+                hintText: 'e.g. "Rafay"',
+                prefixIcon: Icon(Icons.person),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // — Instruction Section —
+            Text(
+              'Find nearby hosts and join a trip. Keep Bluetooth and Location enabled.',
+              style: textTheme.bodySmall?.copyWith(color: colorScheme.outline),
+            ),
+            const SizedBox(height: 16),
+
+            // — Discovery Control Row —
             Row(
               children: [
                 ElevatedButton.icon(

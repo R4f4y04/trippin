@@ -16,6 +16,7 @@ enum SyncEventType {
   expenseMergedOnHost,
   ledgerAppliedOnGuest,
   queueFlushed,
+  finishTripReceived,
 }
 
 class SyncEvent {
@@ -95,7 +96,15 @@ class SyncService {
     required String tripId,
     required List<Expense> expenses,
   }) async {
-    final payload = SyncLedgerPayload(tripId: tripId, expenses: expenses);
+    final trip = await _storage.getTrip(tripId);
+    final members = trip != null ? await _storage.getUsersByIds(trip.memberIds) : null;
+
+    final payload = SyncLedgerPayload(
+      tripId: tripId,
+      tripTitle: trip?.title,
+      expenses: expenses,
+      members: members,
+    );
     final envelope = SyncEnvelope.create(
       type: SyncMessageType.syncLedger,
       payload: payload.toJson(),
@@ -108,6 +117,14 @@ class SyncService {
     final envelope = SyncEnvelope.create(
       type: SyncMessageType.heartbeat,
       payload: payload.toJson(),
+    );
+    await _sendEnvelope(envelope);
+  }
+
+  Future<void> sendFinishTrip({required String tripId}) async {
+    final envelope = SyncEnvelope.create(
+      type: SyncMessageType.finishTrip,
+      payload: {'tripId': tripId},
     );
     await _sendEnvelope(envelope);
   }
@@ -211,9 +228,20 @@ class SyncService {
       await _storage.replaceTripExpensesFromSync(
         tripId: payload.tripId,
         expenses: payload.expenses,
+        tripTitle: payload.tripTitle,
+        members: payload.members,
       );
       _eventController.add(
         SyncEvent(type: SyncEventType.ledgerAppliedOnGuest, envelope: envelope),
+      );
+      return;
+    }
+
+    if (role == SyncRole.guest && envelope.type == SyncMessageType.finishTrip) {
+      final tripId = envelope.payload['tripId'] as String;
+      await _storage.closeTrip(tripId: tripId);
+      _eventController.add(
+        SyncEvent(type: SyncEventType.finishTripReceived, envelope: envelope),
       );
       return;
     }

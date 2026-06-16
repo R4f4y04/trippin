@@ -37,15 +37,21 @@ Map<String, dynamic> _$AddExpensePayloadToJson(AddExpensePayload instance) =>
 SyncLedgerPayload _$SyncLedgerPayloadFromJson(Map<String, dynamic> json) =>
     SyncLedgerPayload(
       tripId: json['tripId'] as String,
+      tripTitle: json['tripTitle'] as String?,
       expenses: (json['expenses'] as List<dynamic>)
           .map((e) => Expense.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      members: (json['members'] as List<dynamic>?)
+          ?.map((e) => User.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
 
 Map<String, dynamic> _$SyncLedgerPayloadToJson(SyncLedgerPayload instance) =>
     <String, dynamic>{
       'tripId': instance.tripId,
+      'tripTitle': instance.tripTitle,
       'expenses': instance.expenses.map((e) => e.toJson()).toList(),
+      'members': instance.members?.map((e) => e.toJson()).toList(),
     };
 
 HeartbeatPayload _$HeartbeatPayloadFromJson(Map<String, dynamic> json) =>
