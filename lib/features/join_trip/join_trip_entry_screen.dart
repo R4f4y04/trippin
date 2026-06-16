@@ -4,13 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/connection_state.dart';
-import '../../core/models/connection_state.dart';
 import '../../core/models/discovered_device.dart';
 import '../../core/riverpod/connection_provider.dart';
-import '../../core/riverpod/profile_provider.dart';
-import '../../core/riverpod/trip_provider.dart';
-import '../../core/services/storage_service.dart';
-import '../../ui_components/primary_button.dart';
 
 /// Redesigned Join Trip Entry Screen for guests.
 ///
@@ -29,17 +24,22 @@ class JoinTripEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _JoinTripEntryScreenState extends ConsumerState<JoinTripEntryScreen> {
+  final _nameController = TextEditingController();
   DateTime? _requestStartedAt;
   Timer? _waitTicker;
 
   @override
   void dispose() {
+    _nameController.dispose();
     _waitTicker?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+
     ref.listen<ConnectionStateModel>(connectionControllerProvider, (
       previous,
       next,
