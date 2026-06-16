@@ -351,7 +351,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: payerId,
+                    initialValue: payerId,
                     decoration: const InputDecoration(labelText: 'Payer'),
                     items: members
                         .map(
@@ -434,7 +434,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                             ? null
                             : noteController.text.trim(),
                       );
-                  if (mounted) {
+                  if (context.mounted) {
                     Navigator.of(context).pop();
                     _showSnack('Expense added');
                   }
@@ -613,7 +613,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: payerId,
+                    initialValue: payerId,
                     decoration: const InputDecoration(labelText: 'Payer'),
                     items: members
                         .map(
@@ -696,7 +696,7 @@ class _TripScreenState extends ConsumerState<TripScreen> {
                             ? null
                             : noteController.text.trim(),
                       );
-                  if (mounted) {
+                  if (context.mounted) {
                     Navigator.of(context).pop();
                     _showSnack('Expense updated');
                   }

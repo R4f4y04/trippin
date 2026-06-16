@@ -153,6 +153,9 @@ Increment update (functional flow):
   - Start Trip now resets loading state safely on failures and shows explicit error feedback.
   - Join screen discovery controls now follow provider status (no local drift).
   - Join screen now surfaces status/error messages and permission-settings recovery action.
+  - Join screen now remains in-place after request and exits only when connection is actually accepted.
+  - Added explicit guest request-cancel support while awaiting host confirmation.
+  - Added pending-request card with selected host context and live elapsed wait timer.
 - Detailed implementation progress is tracked in:
   - `docs/archi/home_hub_host_guest_flow_impl.md`
 
@@ -167,6 +170,7 @@ Execution status update:
 - `dart analyze` after Step 4 queue + flush wiring: no issues found.
 - `dart analyze` after Step 5 status provider + UI badges: no issues found.
 - Validation evidence tracker: `docs/VALIDATION_LOG.md`.
+- `flutter analyze` on Home/Start/Join/Trip + Connection provider slice (2026-04-09): no issues found.
 
 ## Next Execution Sequence (Locked)
 1. Functional hardening first:

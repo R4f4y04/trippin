@@ -65,6 +65,9 @@ Increment update (UX hardening):
 - Added permission-denied recovery action to open app settings.
 - Improved empty-state copy for active scanning vs idle retry state.
 - Start Trip creation now guarantees loading state reset on failure and surfaces an error snackbar.
+- Join request flow now waits on-screen for host confirmation and only exits after a confirmed connection.
+- Added explicit guest-side request cancellation path while awaiting host response.
+- Added an in-screen pending-request card that shows selected host and live elapsed wait time.
 
 ### Phase 5: Add Member Option Split
 Status: Complete

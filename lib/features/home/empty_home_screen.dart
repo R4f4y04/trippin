@@ -44,7 +44,7 @@ class EmptyHomeScreen extends StatelessWidget {
               'Offline-first expense splitting.',
               textAlign: TextAlign.center,
               style: textTheme.titleMedium?.copyWith(
-                color: colorScheme.onSurface.withOpacity(0.8),
+                color: colorScheme.onSurface.withValues(alpha: 0.8),
               ),
             ),
             const SizedBox(height: 24),

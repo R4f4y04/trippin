@@ -160,6 +160,33 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
     );
   }
 
+  Future<void> cancelGuestRequest() async {
+    final isPendingGuestRequest =
+        state.role == ConnectionRole.guest &&
+        (state.status == ConnectionStatus.requestSent ||
+            state.status == ConnectionStatus.awaitingConfirmation);
+    if (!isPendingGuestRequest) {
+      return;
+    }
+
+    await safeExecute(
+      operation: () async {
+        await _p2pService.disconnect(connectionId: state.activeConnectionId);
+      },
+      onError: (error, stackTrace) {
+        AppLogger.error('Failed to cancel guest request', error, stackTrace);
+      },
+    );
+
+    state = state.copyWith(
+      status: ConnectionStatus.idle,
+      activeConnectionId: null,
+      clearSelectedDevice: true,
+      statusMessage: 'Connection request canceled.',
+      clearErrorMessage: true,
+    );
+  }
+
   Future<void> requestConnection(DiscoveredDevice device) async {
     state = state.copyWith(
       status: ConnectionStatus.requestSent,
