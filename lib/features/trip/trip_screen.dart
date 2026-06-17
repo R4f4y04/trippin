@@ -238,7 +238,6 @@ class _TripScreenState extends ConsumerState<TripScreen>
                       onAddPressed: () => _showAddMemberOptions(
                         trip,
                         members,
-                        canAddConnectedGuest,
                       ),
                     ),
 
@@ -329,7 +328,6 @@ class _TripScreenState extends ConsumerState<TripScreen>
   Future<void> _showAddMemberOptions(
     Trip trip,
     List<User> members,
-    bool canAddConnectedGuest,
   ) async {
     if (trip.isClosed) {
       _showSnack('Trip is closed');
@@ -339,20 +337,17 @@ class _TripScreenState extends ConsumerState<TripScreen>
     await showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) => AddMemberOptionsSheet(
-        canConnectGuest: canAddConnectedGuest,
         onAddLocalMember: () {
           Navigator.of(sheetContext).pop();
           _showAddMemberSheet(trip, members);
         },
-        onConnectGuest: () {
-          final guestName =
-              ref
-                  .read(connectionControllerProvider)
-                  .selectedDevice
-                  ?.displayName ??
-              '';
+        onConnectDevice: () {
           Navigator.of(sheetContext).pop();
-          _addConnectedGuestAsMember(trip, members, guestName);
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const HostLobbyScreen(),
+            ),
+          );
         },
       ),
     );

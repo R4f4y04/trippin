@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 
 class AddMemberOptionsSheet extends StatelessWidget {
   final VoidCallback onAddLocalMember;
-  final VoidCallback onConnectGuest;
-  final bool canConnectGuest;
+  final VoidCallback onConnectDevice;
 
   const AddMemberOptionsSheet({
     super.key,
     required this.onAddLocalMember,
-    required this.onConnectGuest,
-    required this.canConnectGuest,
+    required this.onConnectDevice,
   });
 
   @override
@@ -26,23 +24,20 @@ class AddMemberOptionsSheet extends StatelessWidget {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.person_add_alt_1_outlined),
-              title: const Text('Add Local Member'),
+              title: const Text('Add Locally'),
               subtitle: const Text(
-                'Host tracks expenses for someone not connected.',
+                'For someone without the app — you\'ll manage their expenses.',
               ),
               onTap: onAddLocalMember,
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.link_outlined),
-              title: const Text('Connect Guest as Member'),
-              subtitle: Text(
-                canConnectGuest
-                    ? 'Add the currently connected guest to this trip.'
-                    : 'Connect a guest first from Manage Connection.',
+              leading: const Icon(Icons.wifi_tethering),
+              title: const Text('Connect a Device'),
+              subtitle: const Text(
+                'Invite someone nearby to join with their phone.',
               ),
-              enabled: canConnectGuest,
-              onTap: canConnectGuest ? onConnectGuest : null,
+              onTap: onConnectDevice,
             ),
           ],
         ),
