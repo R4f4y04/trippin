@@ -212,6 +212,18 @@ class SyncService {
       return;
     }
 
+    if (role == SyncRole.host && envelope.type == SyncMessageType.handshake) {
+      AppLogger.info('Host received guest HANDSHAKE — sending initial SYNC_LEDGER.');
+      final activeTrip = await _storage.getActiveTrip();
+      if (activeTrip != null) {
+        final ledger = await _storage.getExpensesByTrip(activeTrip.id);
+        await sendSyncLedger(tripId: activeTrip.id, expenses: ledger);
+      } else {
+        AppLogger.warning('Host has no active trip to send in SYNC_LEDGER.');
+      }
+      return;
+    }
+
     if (role == SyncRole.host && envelope.type == SyncMessageType.addExpense) {
       final payload = AddExpensePayload.fromJson(envelope.payload);
       await _storage.mergeSyncedExpense(expense: payload.expense);

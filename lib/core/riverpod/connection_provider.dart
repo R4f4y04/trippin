@@ -10,6 +10,7 @@ import 'expenses_provider.dart';
 import 'expense_sync_status_provider.dart';
 import 'sync_queue_provider.dart';
 import 'trip_provider.dart';
+import 'members_provider.dart';
 import '../services/p2p_service.dart';
 import '../services/permissions_service.dart';
 import '../services/storage_service.dart';
@@ -414,6 +415,8 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
               .read(expenseSyncStatusProvider.notifier)
               .markManySynced(payload.expenses.map((item) => item.id));
         }
+        unawaited(ref.read(tripControllerProvider.notifier).refresh());
+        unawaited(ref.read(membersControllerProvider.notifier).refresh());
         unawaited(ref.read(expensesControllerProvider.notifier).refresh());
         break;
       case SyncEventType.envelopeReceived:
@@ -434,16 +437,23 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
 
   Future<void> _sendGuestHandshake() async {
     final owner = await _storageService.getDeviceOwner();
-    final trip = await _storageService.getActiveTrip();
-    if (owner == null || trip == null) {
+    if (owner == null) {
+      AppLogger.warning('Cannot send handshake: no device owner.');
       return;
     }
 
-    final members = await _storageService.getUsersByIds(trip.memberIds);
-    final managedMemberIds = members
-        .where((user) => user.managedBy == owner.id)
-        .map((user) => user.id)
-        .toList();
+    // The guest may not have a local trip yet — the trip is created when the
+    // host responds with a SYNC_LEDGER.  Send the handshake with whatever
+    // managed-member info is available (empty list when no trip exists).
+    final trip = await _storageService.getActiveTrip();
+    List<String> managedMemberIds = [];
+    if (trip != null) {
+      final members = await _storageService.getUsersByIds(trip.memberIds);
+      managedMemberIds = members
+          .where((user) => user.managedBy == owner.id)
+          .map((user) => user.id)
+          .toList();
+    }
 
     final payload = HandshakePayload(
       deviceId: owner.id,
@@ -451,5 +461,6 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
       managedMemberIds: managedMemberIds,
     );
     await _syncService.sendHandshake(payload);
+    AppLogger.info('Guest handshake sent (deviceId=${owner.id}).');
   }
 }

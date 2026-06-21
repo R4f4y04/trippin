@@ -155,7 +155,8 @@ Increment update (functional flow):
   - Join screen now surfaces status/error messages and permission-settings recovery action.
   - Join screen now remains in-place after request and exits only when connection is actually accepted.
   - Added explicit guest request-cancel support while awaiting host confirmation.
-  - Added pending-request card with selected host context and live elapsed wait timer.
+  - Added pending-request card with selected host context and live elapsed wait time.
+  - Fixed guest routing/sync bug: host now responds to `HANDSHAKE` with initial `SYNC_LEDGER`, and guest refreshes `tripControllerProvider`/`membersControllerProvider` upon ledger receipt to trigger reactive routing to the Trip Screen.
 - Detailed implementation progress is tracked in:
   - `docs/archi/home_hub_host_guest_flow_impl.md`
 
