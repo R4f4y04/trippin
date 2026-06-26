@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/connection_state.dart';
-import '../../core/models/trip.dart';
-import '../../core/models/user.dart';
 import '../../core/riverpod/connection_provider.dart';
-import '../../core/riverpod/members_provider.dart';
 import '../../core/riverpod/trip_provider.dart';
 import '../../ui_components/primary_button.dart';
 
@@ -43,71 +40,20 @@ class _HostLobbyScreenState extends ConsumerState<HostLobbyScreen> {
         .startHost(hostName: 'Host: $tripTitle');
   }
 
-  Future<void> _autoAddGuestAsMember(
-    Trip trip,
-    List<User> members,
-    String guestName,
-  ) async {
-    final normalized = guestName.trim();
-    if (normalized.isEmpty) return;
 
-    final exists = members.any(
-      (m) => m.name.trim().toLowerCase() == normalized.toLowerCase(),
-    );
-    if (exists) {
-      _showSnack('$normalized is already in the trip.');
-      return;
-    }
-
-    final owner = members.where((m) => m.isDeviceOwner).toList();
-    if (owner.isEmpty) return;
-
-    final success = await ref
-        .read(membersControllerProvider.notifier)
-        .addMember(
-          tripId: trip.id,
-          name: normalized,
-          managedBy: owner.first.id,
-        );
-
-    if (success) {
-      _showSnack('$normalized added to trip! 🎉');
-    }
-  }
-
-  void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(connectionControllerProvider);
     final tripAsync = ref.watch(tripControllerProvider);
-    final membersAsync = ref.watch(membersControllerProvider);
 
     final trip = tripAsync.value;
-    final members = membersAsync.value ?? [];
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (state.status == ConnectionStatus.requestIncoming && !_dialogOpen) {
         _dialogOpen = true;
         _showIncomingRequestDialog();
-      }
-    });
-
-    ref.listen<ConnectionStateModel>(connectionControllerProvider, (prev, next) {
-      if (next.status == ConnectionStatus.connected &&
-          prev?.status != ConnectionStatus.connected) {
-        final guestName = next.selectedDevice?.displayName ?? 'Guest';
-        if (trip != null) {
-          _autoAddGuestAsMember(trip, members, guestName);
-        }
       }
     });
 
@@ -281,10 +227,9 @@ class _HostLobbyScreenState extends ConsumerState<HostLobbyScreen> {
 
             TextButton(
               onPressed: () async {
+                final navigator = Navigator.of(context);
                 await ref.read(connectionControllerProvider.notifier).stopHost();
-                if (mounted) {
-                  Navigator.of(context).pop();
-                }
+                navigator.pop();
               },
               child: Text(
                 'Stop & Close Lobby',

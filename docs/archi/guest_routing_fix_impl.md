@@ -44,6 +44,14 @@ Fixed the issue where guest devices behaved as hosts, had access to host-only fe
 - **Problem**: When `ConnectionController` rebuilds, the role is set to `idle`.
 - **Solution**: Updated `build()` in [connection_provider.dart](file:///d:/Code/r4/trippin/lib/core/riverpod/connection_provider.dart) to asynchronously retrieve and restore the persisted device role from `ProfileService`.
 
+### G. Guest Name Communication via Nearby Connections (No "Trippin Guest")
+- **Problem**: The guest name was hardcoded as `"Trippin Guest"` in `p2p_service.dart` during discovery/connection, causing the host to see `"Trippin Guest"` in connection alerts, connection banners, and auto-add the guest as `"Trippin Guest"`. Furthermore, a race condition existed between `HostLobbyScreen` immediately adding the guest under their Nearby display name vs `SyncService` adding them under their handshake payload name.
+- **Solution**:
+  1. Threaded the guest name from `ConnectionController` (by reading the local device owner name) through `P2PService.startDiscovery` and `P2PService.requestConnection`.
+  2. Removed duplicate auto-add logic and listeners from [host_lobby_screen.dart](file:///d:/Code/r4/trippin/lib/features/connection/host_lobby_screen.dart), routing the flow purely through the `SyncService` handshake handler.
+  3. Added a new `SyncEventType.guestMemberAddedOnHost` event emitted when `SyncService` successfully auto-adds the guest.
+  4. Handled the event in `ConnectionController` to refresh `membersControllerProvider` and `tripControllerProvider` to automatically update the host UI avatar strip when the guest connects.
+
 ---
 
 ## Files Modified
@@ -52,8 +60,11 @@ Fixed the issue where guest devices behaved as hosts, had access to host-only fe
 - [lib/features/join_trip/join_trip_entry_screen.dart](file:///d:/Code/r4/trippin/lib/features/join_trip/join_trip_entry_screen.dart)
 - [lib/core/services/sync_service.dart](file:///d:/Code/r4/trippin/lib/core/services/sync_service.dart)
 - [lib/core/riverpod/connection_provider.dart](file:///d:/Code/r4/trippin/lib/core/riverpod/connection_provider.dart)
+- [lib/core/services/p2p_service.dart](file:///d:/Code/r4/trippin/lib/core/services/p2p_service.dart)
+- [lib/features/connection/host_lobby_screen.dart](file:///d:/Code/r4/trippin/lib/features/connection/host_lobby_screen.dart)
 
 ## Gotchas & Verification Notes
 1. **Name Matching**: Auto-adding members matches guest names case-insensitively to avoid duplication.
 2. **Persistence Timing**: The guest name is saved to Hive immediately when scanning starts.
 3. **Restricted Actions on Guest UI**: Guests can add expenses but cannot see "Add Member", "Finish Trip", or edit/delete expenses they don't own.
+4. **Race Condition Prevention**: Only the handshake handler in `SyncService` does the guest auto-addition, ensuring proper separation of concerns and matching of the device owner identity.

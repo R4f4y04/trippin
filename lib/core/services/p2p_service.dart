@@ -211,7 +211,7 @@ class P2PService {
     );
   }
 
-  Future<void> startDiscovery() async {
+  Future<void> startDiscovery({String guestName = 'Trippin Guest'}) async {
     if (!Platform.isAndroid) {
       _eventController.add(
         const P2PEvent(
@@ -222,12 +222,12 @@ class P2PService {
       return;
     }
 
-    AppLogger.info('P2P start discovery');
+    AppLogger.info('P2P start discovery as "$guestName"');
     await stopDiscovery();
 
     final started = await _nearby
         .startDiscovery(
-          'Trippin Guest',
+          guestName,
           Strategy.P2P_STAR,
           onEndpointFound: (id, userName, serviceId) {
             AppLogger.info('P2P onEndpointFound: $id $userName $serviceId');
@@ -279,11 +279,14 @@ class P2PService {
     _eventController.add(const P2PEvent(type: P2PEventType.discoveryStopped));
   }
 
-  Future<void> requestConnection(DiscoveredDevice device) async {
-    AppLogger.info('P2P request connection to ${device.displayName}');
+  Future<void> requestConnection(
+    DiscoveredDevice device, {
+    String guestName = 'Trippin Guest',
+  }) async {
+    AppLogger.info('P2P request connection to ${device.displayName} as "$guestName"');
     final sent = await _nearby
         .requestConnection(
-          'Trippin Guest',
+          guestName,
           device.endpointId,
           onConnectionInitiated: (id, info) async {
             AppLogger.info(

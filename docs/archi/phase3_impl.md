@@ -161,8 +161,10 @@ Increment update (functional flow):
     - Sanitized `isDeviceOwner` on guest during sync ledger application to prevent host owner contaminating guest Hive box.
     - Used `trip.deviceRole == 'guest'` as fallback for role gating in `TripScreen` to prevent reverting to host UI on provider rebuild.
     - Validated and persisted guest name as device owner in Hive and profile before discovery on `JoinTripEntryScreen`.
-    - Auto-added guest as a managed trip member on host handshake using guest name from `HandshakePayload`.
-    - Persisted guest role to `ProfileService` on connection accepted and restored it on `ConnectionController` build to survive restarts/crashes.
+    - Auto-added guest as a managed trip member on host handshake using guest name from HandshakePayload.
+    - Persisted guest role to ProfileService on connection accepted and restored it on ConnectionController build to survive restarts/crashes.
+    - Communicated the guest's real name through Nearby Connections instead of using a hardcoded "Trippin Guest" string.
+    - Resolved the lobby-screen auto-add race condition by making SyncService handshake processing the single authority for auto-adding connected guests.
 - Detailed implementation progress is tracked in:
   - `docs/archi/home_hub_host_guest_flow_impl.md`
 

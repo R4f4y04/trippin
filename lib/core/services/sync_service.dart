@@ -17,6 +17,7 @@ enum SyncEventType {
   ledgerAppliedOnGuest,
   queueFlushed,
   finishTripReceived,
+  guestMemberAddedOnHost,
 }
 
 class SyncEvent {
@@ -258,6 +259,11 @@ class SyncService {
       AppLogger.info(
         'Host sent initial SYNC_LEDGER with ${ledger.length} expenses '
         'and ${updatedTrip?.memberIds.length ?? 0} members.',
+      );
+
+      // Notify listeners so the host UI refreshes its member list.
+      _eventController.add(
+        const SyncEvent(type: SyncEventType.guestMemberAddedOnHost),
       );
       return;
     }

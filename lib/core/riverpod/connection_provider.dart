@@ -155,7 +155,10 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
 
     await safeExecute(
       operation: () async {
-        await _p2pService.startDiscovery();
+        final owner = await _storageService.getDeviceOwner();
+        final guestName = owner?.name ?? 'Trippin Guest';
+        AppLogger.info('Starting guest scan with name: "$guestName"');
+        await _p2pService.startDiscovery(guestName: guestName);
       },
       onError: (error, stackTrace) {
         AppLogger.error('Failed to start guest scan', error, stackTrace);
@@ -216,7 +219,10 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
 
     await safeExecute(
       operation: () async {
-        await _p2pService.requestConnection(device);
+        final owner = await _storageService.getDeviceOwner();
+        final guestName = owner?.name ?? 'Trippin Guest';
+        AppLogger.info('Requesting connection as "$guestName"');
+        await _p2pService.requestConnection(device, guestName: guestName);
       },
       onError: (error, stackTrace) {
         AppLogger.error('Failed to send connection request', error, stackTrace);
@@ -416,6 +422,11 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
 
   void _handleSyncEvent(SyncEvent event) {
     switch (event.type) {
+      case SyncEventType.guestMemberAddedOnHost:
+        AppLogger.info('Guest member added on host — refreshing members and trip.');
+        unawaited(ref.read(membersControllerProvider.notifier).refresh());
+        unawaited(ref.read(tripControllerProvider.notifier).refresh());
+        break;
       case SyncEventType.expenseMergedOnHost:
         final hostEnvelope = event.envelope;
         if (hostEnvelope != null &&
