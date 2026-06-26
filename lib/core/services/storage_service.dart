@@ -463,7 +463,19 @@ class StorageService {
       operation: () async {
         if (members != null) {
           for (final member in members) {
-            await usersBox.put(member.id, member);
+            // isDeviceOwner is a device-local property — it means "this user
+            // represents the person holding THIS physical device."  When syncing
+            // members from the host, we must strip this flag to prevent the
+            // guest from treating the host's owner as its own device owner.
+            final existingLocal = usersBox.get(member.id);
+            final sanitized = existingLocal != null
+                ? member.copyWith(isDeviceOwner: existingLocal.isDeviceOwner)
+                : member.copyWith(isDeviceOwner: false);
+            await usersBox.put(sanitized.id, sanitized);
+            AppLogger.info(
+              'Sync wrote member ${sanitized.name} (id=${sanitized.id}, '
+              'isDeviceOwner=${sanitized.isDeviceOwner}).',
+            );
           }
         }
 

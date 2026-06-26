@@ -1,55 +1,59 @@
-# Guest Routing and Sync Ledger Fix
+# Guest Routing, Identity, and Role Gating Fix
 
 ## Overview
+This document covers the implementation details for fixing guest routing, guest identity persistence, member distinction, and role-based interface gating. These changes ensure that guest devices are correctly routed to a guest-restricted version of the trip screen, their entered name is preserved, they are properly represented as trip members, and their guest role persists across sessions/rebuilds.
+
+---
+
+## 1. Guest Routing & Handshake Fix
 Fixed a bug in the P2P connection flow where a guest device, after having its connection request accepted by the host device, was routed back to the Home Screen instead of the Trip Screen.
 
-## Root Cause Analysis
-The issue was caused by a chain of three linked failures in the synchronization pipeline:
+### Root Causes & Solutions:
+- **Guest Handshake Never Sent**: In `_sendGuestHandshake()` inside [connection_provider.dart](file:///d:/Code/r4/trippin/lib/core/riverpod/connection_provider.dart), the code checked `if (owner == null || trip == null) return;`. The guest device has **no active trip** at connection time. Removed the `trip == null` check to allow handshakes to be sent prior to having a trip.
+- **Missing Host Handshake Response**: Added a handler in `_applyIncomingEnvelope()` inside [sync_service.dart](file:///d:/Code/r4/trippin/lib/core/services/sync_service.dart) for `SyncMessageType.handshake` when the role is `host` to respond with `SYNC_LEDGER`.
+- **Missing Trip/Members State Refresh on Guest**: Updated `_handleSyncEvent` in [connection_provider.dart](file:///d:/Code/r4/trippin/lib/core/riverpod/connection_provider.dart) for the `SyncEventType.ledgerAppliedOnGuest` case to refresh `tripControllerProvider` and `membersControllerProvider` so that the UI routes to the `TripScreen`.
 
-### Failure 1: Guest Handshake Never Sent (Primary Cause)
-In `_sendGuestHandshake()` inside [connection_provider.dart](file:///d:/Code/r4/trippin/lib/core/riverpod/connection_provider.dart), the code checked `if (owner == null || trip == null) return;`. The guest device has **no active trip** at connection time — the trip only gets created on the guest when the first `SYNC_LEDGER` arrives from the host. Since `trip` was always `null` for the guest at this point, the handshake was silently dropped and never sent.
+---
 
-### Failure 2: Missing Host Handshake Response
-The host had no handler for `SyncMessageType.handshake` in `_applyIncomingEnvelope()` inside [sync_service.dart](file:///d:/Code/r4/trippin/lib/core/services/sync_service.dart). Even if the handshake had been sent, the host would not have responded with the initial `SYNC_LEDGER`.
+## 2. Guest Identity, Role Gating, and Member Distinction Fix
+Fixed the issue where guest devices behaved as hosts, had access to host-only features, and guest names were not displayed or synced as members.
 
-### Failure 3: Missing Trip/Members State Refresh on Guest
-In [connection_provider.dart](file:///d:/Code/r4/trippin/lib/core/riverpod/connection_provider.dart), the `_handleSyncEvent` handler for `SyncEventType.ledgerAppliedOnGuest` only refreshed `expensesControllerProvider`. It did not refresh `tripControllerProvider` or `membersControllerProvider`. So even if a ledger eventually arrived, the `AppShell` would never detect the new trip and switch from `HomeScreen` to `TripScreen`.
+### Implementation Details:
 
-## Implementation Details
+### A. Sanitize `isDeviceOwner` During Sync Ledger Application
+- **Problem**: Synced member users sent by the host had `isDeviceOwner: true` for the host. When written to the guest's Hive box, it marked the host as the guest's device owner, confusing the role-detection logic.
+- **Solution**: Modified `replaceTripExpensesFromSync` in [storage_service.dart](file:///d:/Code/r4/trippin/lib/core/services/storage_service.dart) to preserve the local `isDeviceOwner` state if it exists, or write `isDeviceOwner: false` for all synced members.
 
-### 1. Fix Guest Handshake to Not Require Active Trip
-Updated `_sendGuestHandshake()` in [connection_provider.dart](file:///d:/Code/r4/trippin/lib/core/riverpod/connection_provider.dart):
-- Removed the `trip == null` early-return guard.
-- The handshake now sends with device info and an empty `managedMemberIds` list when no local trip exists.
-- Only requires `owner != null` (device owner must be set).
-- Added `AppLogger.info` trace on successful send.
+### B. Use `trip.deviceRole` as Fallback for Role Gating in TripScreen
+- **Problem**: `TripScreen` determined host vs guest using only in-memory connection state (`connectionState.role == ConnectionRole.guest`). Since connection state is volatile and resets to `idle` on provider rebuild, guests were treated as hosts on rebuild/restart.
+- **Solution**: Modified [trip_screen.dart](file:///d:/Code/r4/trippin/lib/features/trip/trip_screen.dart) to fall back to `trip.deviceRole == 'guest'` for role gating.
 
-### 2. Handle Guest Handshake on Host
-Added a handler in `_applyIncomingEnvelope()` inside [sync_service.dart](file:///d:/Code/r4/trippin/lib/core/services/sync_service.dart) for `SyncMessageType.handshake` when role is `host`:
-- Fetches the active trip.
-- If found, retrieves all associated expenses and immediately sends the canonical ledger to the guest via `sendSyncLedger`.
-- Added `AppLogger` tracing for both success and missing-trip cases.
+### C. Persist Guest Name as Device Owner on `JoinTripEntryScreen`
+- **Problem**: The guest's entered name was never saved or used to create a device owner user, so the guest was never registered as a local user or sent with their real name in the handshake.
+- **Solution**: Modified [join_trip_entry_screen.dart](file:///d:/Code/r4/trippin/lib/features/join_trip/join_trip_entry_screen.dart) to check and auto-fill the saved profile name, and write the guest name as the device owner in Hive before starting the scan.
 
-### 3. Refresh Trip and Members State on Guest
-Updated `_handleSyncEvent` in [connection_provider.dart](file:///d:/Code/r4/trippin/lib/core/riverpod/connection_provider.dart) for the `SyncEventType.ledgerAppliedOnGuest` case:
-- Imported `members_provider.dart`.
-- Added `tripControllerProvider.refresh()` and `membersControllerProvider.refresh()` calls before the existing expenses refresh.
-- Once `tripControllerProvider` updates with the new trip, `AppShell` in [main.dart](file:///d:/Code/r4/trippin/lib/main.dart) reactively switches from `HomeScreen` to `TripScreen`.
+### D. Auto-Add Guest as Trip Member on Host When Handshake Is Received
+- **Problem**: The host received the handshake but never added the guest to the trip members list, meaning the guest was not distinguishable, couldn't split expenses, and wasn't in the members list.
+- **Solution**: Modified the handshake handler in [sync_service.dart](file:///d:/Code/r4/trippin/lib/core/services/sync_service.dart) to parse the guest name from the payload, check if they are already in the trip members, and if not, add them as a managed member of the trip on the host.
 
-## Expected Flow After Fix
-1. Guest connects to host → `connectionAccepted` event fires.
-2. `JoinTripEntryScreen` pops (returns to `AppShell` showing `HomeScreen`).
-3. `_sendGuestHandshake()` sends `HANDSHAKE` with device info (no trip required).
-4. Host receives `HANDSHAKE` → sends `SYNC_LEDGER` with trip data + expenses + members.
-5. Guest receives `SYNC_LEDGER` → `replaceTripExpensesFromSync` creates the trip in Hive.
-6. `ledgerAppliedOnGuest` event fires → refreshes `tripControllerProvider`, `membersControllerProvider`, `expensesControllerProvider`.
-7. `AppShell` detects non-null trip → switches from `HomeScreen` to `TripScreen`.
+### E. Persist Guest Device Role on Connection
+- **Problem**: Unlike the host role which is persisted during trip creation, the guest role was never persisted in `ProfileService`, breaking session restoration if the guest restarted the app.
+- **Solution**: Updated `connectionAccepted` event handling in [connection_provider.dart](file:///d:/Code/r4/trippin/lib/core/riverpod/connection_provider.dart) to call `ProfileService.instance.setDeviceRole('guest')` when the guest connects.
+
+### F. Restore Connection Role from Persisted Profile on Provider Build
+- **Problem**: When `ConnectionController` rebuilds, the role is set to `idle`.
+- **Solution**: Updated `build()` in [connection_provider.dart](file:///d:/Code/r4/trippin/lib/core/riverpod/connection_provider.dart) to asynchronously retrieve and restore the persisted device role from `ProfileService`.
+
+---
 
 ## Files Modified
+- [lib/core/services/storage_service.dart](file:///d:/Code/r4/trippin/lib/core/services/storage_service.dart)
+- [lib/features/trip/trip_screen.dart](file:///d:/Code/r4/trippin/lib/features/trip/trip_screen.dart)
+- [lib/features/join_trip/join_trip_entry_screen.dart](file:///d:/Code/r4/trippin/lib/features/join_trip/join_trip_entry_screen.dart)
 - [lib/core/services/sync_service.dart](file:///d:/Code/r4/trippin/lib/core/services/sync_service.dart)
 - [lib/core/riverpod/connection_provider.dart](file:///d:/Code/r4/trippin/lib/core/riverpod/connection_provider.dart)
 
-## Gotchas
-- The guest will briefly see the HomeScreen after `JoinTripEntryScreen` pops, until the `SYNC_LEDGER` round-trip completes and the trip provider refreshes. This is a cosmetic timing issue — the functional routing is correct.
-- The `HandshakePayload.managedMemberIds` will be empty on first guest connection. This is correct because the guest has no locally managed members until the host assigns them.
-- The `SyncMessageType.handshake` envelope must be processed cleanly to ensure initial synchronization succeeds immediately upon connection establishment.
+## Gotchas & Verification Notes
+1. **Name Matching**: Auto-adding members matches guest names case-insensitively to avoid duplication.
+2. **Persistence Timing**: The guest name is saved to Hive immediately when scanning starts.
+3. **Restricted Actions on Guest UI**: Guests can add expenses but cannot see "Add Member", "Finish Trip", or edit/delete expenses they don't own.

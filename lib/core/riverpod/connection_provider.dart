@@ -15,6 +15,7 @@ import '../services/p2p_service.dart';
 import '../services/permissions_service.dart';
 import '../services/storage_service.dart';
 import '../services/sync_service.dart';
+import '../services/profile_service.dart';
 import '../utils/app_logger.dart';
 import '../utils/safe_execute.dart';
 
@@ -41,7 +42,24 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
       _syncSubscription?.cancel();
       unawaited(_syncService.stop());
     });
+
+    // Async role restoration from persisted profile.
+    // This runs after build() returns, updating state if a persisted
+    // role exists (e.g. crash recovery mid-session).
+    _restorePersistedRole();
+
     return const ConnectionStateModel.initial();
+  }
+
+  Future<void> _restorePersistedRole() async {
+    final persistedRole = await ProfileService.instance.getDeviceRole();
+    if (persistedRole == 'guest') {
+      state = state.copyWith(role: ConnectionRole.guest);
+      AppLogger.info('Restored persisted connection role: guest.');
+    } else if (persistedRole == 'host') {
+      state = state.copyWith(role: ConnectionRole.host);
+      AppLogger.info('Restored persisted connection role: host.');
+    }
   }
 
   Future<void> startHost({required String hostName}) async {
@@ -355,6 +373,9 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
         if (state.role == ConnectionRole.guest) {
           unawaited(_sendGuestHandshake());
           unawaited(ref.read(syncQueueCountProvider.notifier).refresh());
+          // Persist guest role for crash recovery and role gating.
+          unawaited(ProfileService.instance.setDeviceRole('guest'));
+          AppLogger.info('Guest role persisted to ProfileService.');
         }
         state = state.copyWith(
           status: ConnectionStatus.connected,

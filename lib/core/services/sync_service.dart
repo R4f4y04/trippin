@@ -213,14 +213,52 @@ class SyncService {
     }
 
     if (role == SyncRole.host && envelope.type == SyncMessageType.handshake) {
-      AppLogger.info('Host received guest HANDSHAKE — sending initial SYNC_LEDGER.');
+      final payload = HandshakePayload.fromJson(envelope.payload);
+      AppLogger.info(
+        'Host received guest HANDSHAKE — '
+        'deviceId=${payload.deviceId}, deviceName=${payload.deviceName}.',
+      );
+
       final activeTrip = await _storage.getActiveTrip();
-      if (activeTrip != null) {
-        final ledger = await _storage.getExpensesByTrip(activeTrip.id);
-        await sendSyncLedger(tripId: activeTrip.id, expenses: ledger);
-      } else {
+      if (activeTrip == null) {
         AppLogger.warning('Host has no active trip to send in SYNC_LEDGER.');
+        return;
       }
+
+      // Auto-add the guest as a trip member if not already present.
+      // Use the guest's deviceName from the handshake payload.
+      final existingMembers = await _storage.getUsersByIds(activeTrip.memberIds);
+      final guestAlreadyMember = existingMembers.any(
+        (m) => m.name.trim().toLowerCase() == payload.deviceName.trim().toLowerCase(),
+      );
+
+      if (!guestAlreadyMember && payload.deviceName.trim().isNotEmpty) {
+        final hostOwner = await _storage.getDeviceOwner();
+        if (hostOwner != null) {
+          final addedMember = await _storage.addMemberToTrip(
+            tripId: activeTrip.id,
+            name: payload.deviceName.trim(),
+            managedBy: hostOwner.id,
+          );
+          AppLogger.info(
+            'Host auto-added guest "${payload.deviceName}" as trip member '
+            '(id=${addedMember?.id}).',
+          );
+        }
+      } else if (guestAlreadyMember) {
+        AppLogger.info(
+          'Guest "${payload.deviceName}" already exists in trip members.',
+        );
+      }
+
+      // Re-read the trip to pick up the newly added member in the ledger.
+      final updatedTrip = await _storage.getTrip(activeTrip.id);
+      final ledger = await _storage.getExpensesByTrip(activeTrip.id);
+      await sendSyncLedger(tripId: activeTrip.id, expenses: ledger);
+      AppLogger.info(
+        'Host sent initial SYNC_LEDGER with ${ledger.length} expenses '
+        'and ${updatedTrip?.memberIds.length ?? 0} members.',
+      );
       return;
     }
 

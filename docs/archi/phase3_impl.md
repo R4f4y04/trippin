@@ -157,6 +157,12 @@ Increment update (functional flow):
   - Added explicit guest request-cancel support while awaiting host confirmation.
   - Added pending-request card with selected host context and live elapsed wait time.
   - Fixed guest routing/sync bug: host now responds to `HANDSHAKE` with initial `SYNC_LEDGER`, and guest refreshes `tripControllerProvider`/`membersControllerProvider` upon ledger receipt to trigger reactive routing to the Trip Screen.
+  - Implemented Guest Identity, Role Gating, and Member Distinction Fixes:
+    - Sanitized `isDeviceOwner` on guest during sync ledger application to prevent host owner contaminating guest Hive box.
+    - Used `trip.deviceRole == 'guest'` as fallback for role gating in `TripScreen` to prevent reverting to host UI on provider rebuild.
+    - Validated and persisted guest name as device owner in Hive and profile before discovery on `JoinTripEntryScreen`.
+    - Auto-added guest as a managed trip member on host handshake using guest name from `HandshakePayload`.
+    - Persisted guest role to `ProfileService` on connection accepted and restored it on `ConnectionController` build to survive restarts/crashes.
 - Detailed implementation progress is tracked in:
   - `docs/archi/home_hub_host_guest_flow_impl.md`
 

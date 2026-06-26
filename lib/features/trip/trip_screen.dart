@@ -112,7 +112,11 @@ class _TripScreenState extends ConsumerState<TripScreen>
         final members = membersAsync.value ?? [];
         final expenses = expensesAsync.value ?? [];
         final isClosed = trip.isClosed;
-        final isGuestRole = connectionState.role == ConnectionRole.guest;
+        // Use both connection state AND persisted trip.deviceRole for role
+        // gating.  Connection state is volatile (resets to idle on rebuild),
+        // but trip.deviceRole is persisted in Hive and survives restarts.
+        final isGuestRole = connectionState.role == ConnectionRole.guest ||
+            trip.deviceRole == 'guest';
         final isHost = !isGuestRole;
         final memberMap = {
           for (final member in members) member.id: member.name,

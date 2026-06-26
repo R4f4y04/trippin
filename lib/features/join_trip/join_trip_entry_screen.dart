@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/connection_state.dart';
 import '../../core/models/discovered_device.dart';
 import '../../core/riverpod/connection_provider.dart';
+import '../../core/riverpod/profile_provider.dart';
+import '../../core/services/storage_service.dart';
+import '../../core/utils/app_logger.dart';
 
 /// Redesigned Join Trip Entry Screen for guests.
 ///
@@ -27,6 +30,19 @@ class _JoinTripEntryScreenState extends ConsumerState<JoinTripEntryScreen> {
   final _nameController = TextEditingController();
   DateTime? _requestStartedAt;
   Timer? _waitTicker;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedName();
+  }
+
+  Future<void> _loadSavedName() async {
+    final savedName = await ref.read(savedNameProvider.future);
+    if (savedName != null && savedName.isNotEmpty && mounted) {
+      _nameController.text = savedName;
+    }
+  }
 
   @override
   void dispose() {
@@ -216,6 +232,19 @@ class _JoinTripEntryScreenState extends ConsumerState<JoinTripEntryScreen> {
   }
 
   Future<void> _startDiscovery() async {
+    final guestName = _nameController.text.trim();
+    if (guestName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your name first')),
+      );
+      return;
+    }
+
+    // Persist the guest name as device owner and in profile for future sessions.
+    await StorageService.instance.setOrCreateDeviceOwner(name: guestName);
+    await ref.read(savedNameProvider.notifier).updateName(guestName);
+    AppLogger.info('Guest name "$guestName" persisted as device owner.');
+
     await ref.read(connectionControllerProvider.notifier).startGuestScan();
   }
 
