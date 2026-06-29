@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/trip.dart';
 import '../../../core/models/user.dart';
+import '../../../core/models/connection_state.dart';
+import '../../../core/riverpod/connection_provider.dart';
 import '../../../core/riverpod/expenses_provider.dart';
 import '../../../core/utils/currency_format.dart';
 import '../../../core/utils/member_colors.dart';
@@ -143,6 +145,15 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
 
+    final connectionState = ref.watch(connectionControllerProvider);
+    final isGuest = connectionState.role == ConnectionRole.guest ||
+        widget.trip.deviceRole == 'guest';
+
+    final deviceOwner = widget.members.where((m) => m.isDeviceOwner).toList();
+    final payers = (isGuest && deviceOwner.isNotEmpty)
+        ? deviceOwner
+        : widget.members;
+
     return Container(
       decoration: BoxDecoration(
         color: theme.canvasColor,
@@ -253,20 +264,23 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
                 height: 48,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: widget.members.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemCount: payers.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
-                    final member = widget.members[index];
-                    final color = getMemberColor(index);
+                    final member = payers[index];
+                    final colorIndex = widget.members.indexWhere((m) => m.id == member.id);
+                    final color = getMemberColor(colorIndex >= 0 ? colorIndex : index);
                     final isSelected = _payerId == member.id;
                     return MemberChip(
                       name: member.name,
                       memberColor: color,
                       isSelected: isSelected,
-                      onTap: () {
-                        AppHaptics.lightTap();
-                        setState(() => _payerId = member.id);
-                      },
+                      onTap: isGuest
+                          ? () {} // Lock tap interactions for guests
+                          : () {
+                              AppHaptics.lightTap();
+                              setState(() => _payerId = member.id);
+                            },
                     );
                   },
                 ),
@@ -304,7 +318,7 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: widget.members.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
                     final member = widget.members[index];
                     final color = getMemberColor(index);

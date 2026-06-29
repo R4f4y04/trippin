@@ -324,6 +324,7 @@ class StorageService {
     required String tripId,
     required String name,
     required String managedBy,
+    String? id,
   }) async {
     final trip = await getTrip(tripId);
     if (trip == null) {
@@ -338,7 +339,11 @@ class StorageService {
     final usersBox = await _openUsersBox();
     final tripsBox = await _openTripsBox();
 
-    final member = User.createMember(name: name, managedBy: managedBy);
+    final member = User.createMember(
+      name: name,
+      managedBy: managedBy,
+      id: id,
+    );
     final updatedTrip = trip.copyWith(
       memberIds: [...trip.memberIds, member.id],
       lastModifiedAt: DateTime.now(),

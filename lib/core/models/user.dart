@@ -43,9 +43,10 @@ class User {
   factory User.createMember({
     required String name,
     required String managedBy,
+    String? id,
   }) {
     return User(
-      id: const Uuid().v4(),
+      id: id ?? const Uuid().v4(),
       name: name,
       isDeviceOwner: false,
       managedBy: managedBy,

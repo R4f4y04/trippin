@@ -240,6 +240,7 @@ class SyncService {
             tripId: activeTrip.id,
             name: payload.deviceName.trim(),
             managedBy: hostOwner.id,
+            id: payload.deviceId,
           );
           AppLogger.info(
             'Host auto-added guest "${payload.deviceName}" as trip member '
