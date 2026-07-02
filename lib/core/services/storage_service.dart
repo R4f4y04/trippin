@@ -221,9 +221,21 @@ class StorageService {
   }
 
   Future<List<User>> getUsersByIds(List<String> ids) async {
+    // Fix for bug 5c: Return users in the order of `ids` list to ensure
+    // consistent member ordering across devices. Previously returned Hive
+    // insertion order which differed between host and guest boxes.
     final box = await _openUsersBox();
-    final idSet = ids.toSet();
-    return box.values.where((user) => idSet.contains(user.id)).toList();
+    
+    if (ids.isEmpty) return [];
+
+    // Build a map for O(1) lookup
+    final idToUserMap = <String, User>{};
+    for (final user in box.values) {
+      idToUserMap[user.id] = user;
+    }
+
+    // Return users in the canonical order of `ids` list
+    return [for (final id in ids) if (idToUserMap.containsKey(id)) idToUserMap[id]!];
   }
 
   Future<List<Expense>> getExpensesByTrip(String tripId) async {
@@ -339,26 +351,46 @@ class StorageService {
     final usersBox = await _openUsersBox();
     final tripsBox = await _openTripsBox();
 
+    // Check for existing member with same ID first (dedup guard)
+    if (id != null && usersBox.containsKey(id)) {
+      AppLogger.info('Member with id=$id already exists, skipping creation');
+      return usersBox.get(id);
+    }
+
     final member = User.createMember(
       name: name,
       managedBy: managedBy,
-      id: id,
+      id: id ?? const Uuid().v4(), // Generate UUID if not provided
     );
+    
+    // Fix for bug 5i: Only append to trip.memberIds if this is a new member ID
+    final updatedMemberId = member.id;
+    final existingTrip = await getTrip(tripId);
+    final shouldAppend = id == null || !existingTrip?.memberIds.contains(updatedMemberId) ?? false;
+
     final updatedTrip = trip.copyWith(
-      memberIds: [...trip.memberIds, member.id],
+      memberIds: shouldAppend 
+          ? [...trip.memberIds, updatedMemberId] 
+          : trip.memberIds,
       lastModifiedAt: DateTime.now(),
     );
 
     await safeExecute(
       operation: () async {
-        await usersBox.put(member.id, member);
+        await usersBox.put(updatedMemberId, member);
         await tripsBox.put(updatedTrip.id, updatedTrip);
-        await _appendHistoryEvent(
-          tripId: updatedTrip.id,
-          type: 'ADD_MEMBER',
-          summary: 'Added member ${member.name}',
-          actorId: managedBy,
-        );
+        
+        // Only append history event if this is a new member (not dedup)
+        if (shouldAppend || id == null) {
+          await _appendHistoryEvent(
+            tripId: updatedTrip.id,
+            type: 'ADD_MEMBER',
+            summary: 'Added member ${member.name}',
+            actorId: managedBy,
+          );
+        } else {
+          AppLogger.info('Skipping history event for existing member');
+        }
       },
       onError: (error, stackTrace) {
         AppLogger.error('Failed to add member', error, stackTrace);
@@ -433,9 +465,13 @@ class StorageService {
     final tripsBox = await _openTripsBox();
     final alreadyExists = expensesBox.containsKey(expense.id);
 
-    final nextExpenseIds = alreadyExists
-        ? trip.expenseIds
-        : [...trip.expenseIds, expense.id];
+    // Avoid duplicate entries in expenseIds list
+    if (alreadyExists) {
+      AppLogger.info('Expense ${expense.name} already exists, skipping merge');
+      return;
+    }
+
+    final nextExpenseIds = [...trip.expenseIds, expense.id];
     final updatedTrip = trip.copyWith(
       expenseIds: nextExpenseIds,
       lastModifiedAt: DateTime.now(),
@@ -464,57 +500,61 @@ class StorageService {
 
     var trip = await getTrip(tripId);
 
-    await safeExecute(
-      operation: () async {
-        if (members != null) {
-          for (final member in members) {
-            // isDeviceOwner is a device-local property — it means "this user
-            // represents the person holding THIS physical device."  When syncing
-            // members from the host, we must strip this flag to prevent the
-            // guest from treating the host's owner as its own device owner.
-            final existingLocal = usersBox.get(member.id);
-            final sanitized = existingLocal != null
-                ? member.copyWith(isDeviceOwner: existingLocal.isDeviceOwner)
-                : member.copyWith(isDeviceOwner: false);
-            await usersBox.put(sanitized.id, sanitized);
-            AppLogger.info(
-              'Sync wrote member ${sanitized.name} (id=${sanitized.id}, '
-              'isDeviceOwner=${sanitized.isDeviceOwner}).',
-            );
-          }
-        }
+    // If we have new member data, sanitize and update members first
+    if (members != null) {
+      for (final member in members) {
+        final existingLocal = usersBox.get(member.id);
+        
+        // Preserve isDeviceOwner flag from local user when syncing host's owner to guest
+        final sanitized = existingLocal != null
+            ? member.copyWith(isDeviceOwner: existingLocal.isDeviceOwner, managedBy: existingLocal.managedBy ?? '')
+            : member.copyWith(isDeviceOwner: false);
+            
+        await usersBox.put(sanitized.id, sanitized);
+      }
 
-        if (trip == null) {
-          trip = Trip.create(title: tripTitle ?? 'Synced Trip').copyWith(
-            id: tripId,
-            deviceRole: 'guest',
-            memberIds: members?.map((m) => m.id).toList() ?? [],
-          );
-        } else if (members != null) {
-          trip = trip!.copyWith(
-            memberIds: members.map((m) => m.id).toList(),
-          );
-        }
-
-        final existing = await getExpensesByTrip(tripId);
-        for (final expense in existing) {
-          await expensesBox.delete(expense.id);
-        }
-
-        for (final expense in expenses) {
-          await expensesBox.put(expense.id, expense);
-        }
-
-        final updatedTrip = trip!.copyWith(
-          expenseIds: expenses.map((item) => item.id).toList(),
-          lastModifiedAt: DateTime.now(),
+      // Update trip with new members if different from current list
+      final currentMemberIds = (trip?.memberIds ?? []).toSet();
+      final incomingMemberIds = members.map((m) => m.id).toSet();
+      
+      if (!currentMemberIds.equals(incomingMemberIds)) {
+        trip = trip!.copyWith(
+          memberIds: [...incomingMemberIds],
         );
-        await tripsBox.put(updatedTrip.id, updatedTrip);
-      },
-      onError: (error, stackTrace) {
-        AppLogger.error('Failed to apply synced ledger', error, stackTrace);
-      },
+      }
+    }
+
+    // If no existing trip and we have a title, create one
+    if (trip == null) {
+      trip = Trip.create(title: tripTitle ?? 'Synced Trip').copyWith(
+        id: tripId,
+        deviceRole: 'guest',
+        memberIds: members?.map((m) => m.id).toList() ?? [],
+      );
+    }
+
+    // Compute set difference to avoid deleting locally-added items that host hasn't synced yet (bug 5h fix sketch)
+    final existing = await getExpensesByTrip(tripId);
+    final localExpenseIds = {for (final e in existing) e.id};
+    final incomingExpenseIds = {for (final e in expenses) e.id};
+    
+    // Only delete expenses that exist locally but NOT in the new ledger AND not being re-added
+    final toDelete = localExpenseIds.difference(incomingExpenseIds).toList();
+
+    for (final expenseId in toDelete) {
+      await expensesBox.delete(expenseId);
+    }
+
+    // Upsert all incoming expenses
+    for (final expense in expenses) {
+      await expensesBox.put(expense.id, expense);
+    }
+
+    final updatedTrip = trip!.copyWith(
+      expenseIds: [...incomingExpenseIds],
+      lastModifiedAt: DateTime.now(),
     );
+    await tripsBox.put(updatedTrip.id, updatedTrip);
   }
 
   /// Updates lightweight trip metadata (e.g. deviceRole) without
