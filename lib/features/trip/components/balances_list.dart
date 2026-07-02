@@ -139,11 +139,12 @@ class BalancesList extends StatelessWidget {
         ),
         const SizedBox(width: 8),
 
-        // Amount
+        // Amount - Fix for bug 5b: Use formatPKR with signed value to preserve sign,
+        // only prepend '+' for positive balances. This matches the fix in trip_header.dart (bug 5a).
         SizedBox(
           width: 85,
           child: Text(
-            '${isPositive ? '+' : ''}${formatPKR(balance.abs())}',
+            isPositive ? '+${formatPKR(balance)}' : formatPKR(balance),
             textAlign: TextAlign.right,
             style: textTheme.bodyMedium?.copyWith(
               color: barColor,
