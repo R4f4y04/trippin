@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/expense.dart';
@@ -360,13 +361,13 @@ class StorageService {
     final member = User.createMember(
       name: name,
       managedBy: managedBy,
-      id: id ?? const Uuid().v4(), // Generate UUID if not provided
+      id: id,
     );
     
     // Fix for bug 5i: Only append to trip.memberIds if this is a new member ID
     final updatedMemberId = member.id;
     final existingTrip = await getTrip(tripId);
-    final shouldAppend = id == null || !existingTrip?.memberIds.contains(updatedMemberId) ?? false;
+    final shouldAppend = id == null || !(existingTrip?.memberIds.contains(updatedMemberId) ?? false);
 
     final updatedTrip = trip.copyWith(
       memberIds: shouldAppend 
@@ -381,7 +382,7 @@ class StorageService {
         await tripsBox.put(updatedTrip.id, updatedTrip);
         
         // Only append history event if this is a new member (not dedup)
-        if (shouldAppend || id == null) {
+        if (shouldAppend) {
           await _appendHistoryEvent(
             tripId: updatedTrip.id,
             type: 'ADD_MEMBER',
@@ -517,7 +518,7 @@ class StorageService {
       final currentMemberIds = (trip?.memberIds ?? []).toSet();
       final incomingMemberIds = members.map((m) => m.id).toSet();
       
-      if (!currentMemberIds.equals(incomingMemberIds)) {
+      if (!setEquals(currentMemberIds, incomingMemberIds)) {
         trip = trip!.copyWith(
           memberIds: [...incomingMemberIds],
         );
@@ -525,13 +526,11 @@ class StorageService {
     }
 
     // If no existing trip and we have a title, create one
-    if (trip == null) {
-      trip = Trip.create(title: tripTitle ?? 'Synced Trip').copyWith(
-        id: tripId,
-        deviceRole: 'guest',
-        memberIds: members?.map((m) => m.id).toList() ?? [],
-      );
-    }
+    trip ??= Trip.create(title: tripTitle ?? 'Synced Trip').copyWith(
+      id: tripId,
+      deviceRole: 'guest',
+      memberIds: members?.map((m) => m.id).toList() ?? [],
+    );
 
     // Compute set difference to avoid deleting locally-added items that host hasn't synced yet (bug 5h fix sketch)
     final existing = await getExpensesByTrip(tripId);
@@ -550,7 +549,7 @@ class StorageService {
       await expensesBox.put(expense.id, expense);
     }
 
-    final updatedTrip = trip!.copyWith(
+    final updatedTrip = trip.copyWith(
       expenseIds: [...incomingExpenseIds],
       lastModifiedAt: DateTime.now(),
     );
