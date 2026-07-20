@@ -28,3 +28,21 @@ Implemented a clean landing experience when no trip is active. The screen center
 ## Gotchas
 - Sample trip should only be used for onboarding; it does not replace existing data.
 - All data is stored locally via Hive.
+
+## Increment: Home Hub Host/Guest Split (In Progress)
+- Replaced ambiguous single create action with explicit role entry points:
+	- Start Trip as Host
+	- Join Trip as Guest
+- `HomeScreen` now routes to dedicated feature screens instead of inline trip creation dialog.
+- `EmptyHomeScreen` now exposes both host and guest CTA paths while keeping History/Settings/About available.
+- Added dedicated screens:
+	- `lib/features/start_trip/start_trip_screen.dart`
+	- `lib/features/join_trip/join_trip_entry_screen.dart`
+
+Status:
+- Home Hub upgrade: complete.
+- Dedicated start/join entry screens: complete.
+- Add-member options split in trip screen: pending next step.
+
+Detailed implementation log for this increment:
+- `docs/archi/home_hub_host_guest_flow_impl.md`

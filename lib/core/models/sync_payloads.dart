@@ -2,6 +2,8 @@ import 'package:json_annotation/json_annotation.dart';
 
 import 'expense.dart';
 
+import 'user.dart';
+
 part 'sync_payloads.g.dart';
 
 @JsonSerializable(explicitToJson: true)
@@ -38,9 +40,16 @@ class AddExpensePayload {
 @JsonSerializable(explicitToJson: true)
 class SyncLedgerPayload {
   final String tripId;
+  final String? tripTitle;
   final List<Expense> expenses;
+  final List<User>? members;
 
-  const SyncLedgerPayload({required this.tripId, required this.expenses});
+  const SyncLedgerPayload({
+    required this.tripId,
+    this.tripTitle,
+    required this.expenses,
+    this.members,
+  });
 
   factory SyncLedgerPayload.fromJson(Map<String, dynamic> json) =>
       _$SyncLedgerPayloadFromJson(json);

@@ -7,6 +7,7 @@ import '../services/sync_service.dart';
 import '../utils/app_logger.dart';
 import 'connection_provider.dart';
 import 'expense_sync_status_provider.dart';
+import 'sync_queue_provider.dart';
 import 'trip_provider.dart';
 
 final expensesControllerProvider =
@@ -54,6 +55,12 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
     required List<String> beneficiaryIds,
     String? note,
   }) async {
+    final connectionState = ref.read(connectionControllerProvider);
+    if (connectionState.role == ConnectionRole.guest) {
+      AppLogger.warning('Guest role cannot edit expenses in Phase 3.');
+      return;
+    }
+
     await _storage.updateExpense(
       expenseId: expenseId,
       name: name,
@@ -68,6 +75,12 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
   }
 
   Future<void> deleteExpense({required String expenseId}) async {
+    final connectionState = ref.read(connectionControllerProvider);
+    if (connectionState.role == ConnectionRole.guest) {
+      AppLogger.warning('Guest role cannot delete expenses in Phase 3.');
+      return;
+    }
+
     final existing = await _storage.getExpense(expenseId);
     await _storage.deleteExpense(expenseId: expenseId);
     await _syncAfterLocalMutation(tripId: existing?.tripId);
@@ -94,6 +107,7 @@ class ExpensesController extends AsyncNotifier<List<Expense>> {
           tripId: tripId,
           expense: createdExpense,
         );
+        await ref.read(syncQueueCountProvider.notifier).refresh();
         AppLogger.info('Guest queued ADD_EXPENSE for trip $tripId.');
       }
       return;

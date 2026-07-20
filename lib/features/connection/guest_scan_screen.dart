@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/connection_state.dart';
 import '../../core/models/discovered_device.dart';
 import '../../core/riverpod/connection_provider.dart';
+import '../../core/utils/animations.dart';
+import '../../core/utils/haptics.dart';
 import '../../ui_components/primary_button.dart';
 
 class GuestScanScreen extends ConsumerStatefulWidget {
@@ -63,7 +65,52 @@ class _GuestScanScreenState extends ConsumerState<GuestScanScreen> {
           Text('Nearby Hosts', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           if (state.discoveredDevices.isEmpty)
-            const Text('No hosts found yet.')
+            Card(
+              elevation: 0,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(
+                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+                child: Column(
+                  children: [
+                    PulsingGlow(
+                      glowColor: Theme.of(context).colorScheme.secondary,
+                      maxRadius: 4.0,
+                      child: CircleAvatar(
+                        radius: 28,
+                        backgroundColor: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
+                        child: Icon(
+                          Icons.radar_rounded,
+                          size: 28,
+                          color: Theme.of(context).colorScheme.secondary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No hosts found nearby',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Ensure the host has opened their lobby and both devices have Wi-Fi, Bluetooth, and Location services enabled.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.outline,
+                            height: 1.4,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            )
           else
             ...state.discoveredDevices
                 .map(
@@ -71,28 +118,32 @@ class _GuestScanScreenState extends ConsumerState<GuestScanScreen> {
                       _DeviceTile(device: device, onTap: _confirmConnect),
                 )
                 .toList(),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
           PrimaryButton(
             label: state.status == ConnectionStatus.discovering
                 ? 'Scanning...'
                 : 'Rescan Nearby Hosts',
             onPressed: state.status == ConnectionStatus.discovering
                 ? null
-                : () => ref
-                      .read(connectionControllerProvider.notifier)
-                      .startGuestScan(),
+                : () {
+                    AppHaptics.lightTap();
+                    ref.read(connectionControllerProvider.notifier).startGuestScan();
+                  },
           ),
           if (state.status == ConnectionStatus.connected) ...[
             const SizedBox(height: 12),
             PrimaryButton(
               label: 'Disconnect',
-              onPressed: () =>
-                  ref.read(connectionControllerProvider.notifier).disconnect(),
+              onPressed: () {
+                AppHaptics.warningBuzz();
+                ref.read(connectionControllerProvider.notifier).disconnect();
+              },
             ),
           ],
           const SizedBox(height: 12),
           TextButton(
             onPressed: () async {
+              AppHaptics.lightTap();
               await ref
                   .read(connectionControllerProvider.notifier)
                   .stopGuestScan();

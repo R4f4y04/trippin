@@ -2,242 +2,247 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/models/expense.dart';
-import '../../core/models/trip_history_event.dart';
+import '../../core/models/trip.dart';
 import '../../core/riverpod/trip_detail_provider.dart';
+import '../../core/riverpod/trip_list_provider.dart';
+import '../../core/riverpod/trip_provider.dart';
 import '../../core/services/export_service.dart';
+import '../trip/components/activity_timeline.dart';
+import '../trip/components/balances_list.dart';
+import '../trip/components/expenses_list.dart';
+import '../trip/components/trip_header.dart';
 
-class TripDetailScreen extends ConsumerWidget {
+/// Redesigned Premium Read-Only Trip Detail Screen for History.
+///
+/// Features:
+/// - Reuses the exact high-fidelity tabbed layout of the active TripScreen (Expenses / Balances / Activity)
+/// - Deployed in read-only mode (No floating action button, no swipe edit/delete gestures)
+/// - Overflow/AppBar actions: "Copy WhatsApp Summary" and "Reopen Trip" (restricted to host only)
+class TripDetailScreen extends ConsumerStatefulWidget {
   final String tripId;
 
-  const TripDetailScreen({super.key, required this.tripId});
+  const TripDetailScreen({
+    super.key,
+    required this.tripId,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final detailAsync = ref.watch(tripDetailProvider(tripId));
+  ConsumerState<TripDetailScreen> createState() => _TripDetailScreenState();
+}
+
+class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  bool _isExporting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _exportSummary(Trip trip) async {
+    setState(() => _isExporting = true);
+
+    try {
+      final exportText = await ExportService().buildTripSummary(trip.id);
+      await Clipboard.setData(ClipboardData(text: exportText));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('WhatsApp summary copied to clipboard! 📋✈️'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to copy summary.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExporting = false);
+      }
+    }
+  }
+
+  Future<void> _reopenTrip(Trip trip) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Reopen Trip'),
+        content: Text('Would you like to reopen "${trip.title}"? This will set it as your active running trip.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Reopen', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ref.read(tripControllerProvider.notifier).reopenTrip(trip.id);
+      await ref.read(tripListControllerProvider.notifier).refresh();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Trip reopened! Welcome back 🚗'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        // Pop back to Home. AppShell will detect the reopened active trip and route to TripScreen automatically.
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final detailAsync = ref.watch(tripDetailProvider(widget.tripId));
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Trip Details'),
-        actions: [
-          IconButton(
-            tooltip: 'Export',
-            icon: const Icon(Icons.share_outlined),
-            onPressed: () => _showExport(context),
-          ),
-        ],
+        actions: detailAsync.when(
+          loading: () => [],
+          error: (_, __) => [],
+          data: (detail) {
+            final isHost = detail.trip.deviceRole == 'host';
+            return [
+              IconButton(
+                tooltip: 'Copy Summary',
+                icon: const Icon(Icons.share),
+                onPressed: _isExporting ? null : () => _exportSummary(detail.trip),
+              ),
+              PopupMenuButton<String>(
+                onSelected: (val) {
+                  if (val == 'reopen') {
+                    _reopenTrip(detail.trip);
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'reopen',
+                    enabled: isHost,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.restore,
+                          color: isHost ? colorScheme.onSurface : colorScheme.outline,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        const Text('Reopen Trip'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ];
+          },
+        ),
       ),
       body: detailAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Failed: $error')),
+        error: (error, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 40, color: Colors.red),
+                const SizedBox(height: 12),
+                Text('Failed to load trip details', style: textTheme.titleMedium),
+              ],
+            ),
+          ),
+        ),
         data: (detail) {
-          final memberMap = {
-            for (final member in detail.members) member.id: member.name,
-          };
-          return ListView(
-            padding: const EdgeInsets.all(16),
+          final members = detail.members;
+          final expenses = detail.expenses;
+          final balances = detail.balances;
+          final history = detail.history;
+
+          final memberMap = {for (final m in members) m.id: m.name};
+          final memberIndexMap = {for (var i = 0; i < members.length; i++) members[i].id: i};
+
+          final totalSpent = expenses.fold<double>(0.0, (sum, e) => sum + e.amount);
+          final owner = members.where((m) => m.isDeviceOwner).toList();
+          final personalBalance = owner.isNotEmpty ? (balances[owner.first.id] ?? 0.0) : 0.0;
+
+          return Column(
             children: [
-              _SummaryCard(detail: detail, memberMap: memberMap),
-              const SizedBox(height: 16),
-              _SectionCard(
-                title: 'Balances',
-                child: _BalancesList(
-                  balances: detail.balances,
-                  memberMap: memberMap,
-                ),
+              // Proportional Trip Header details (same as TripScreen)
+              TripHeader(
+                trip: detail.trip,
+                memberCount: members.length,
+                totalSpent: totalSpent,
+                personalBalance: personalBalance,
               ),
-              const SizedBox(height: 16),
-              _SectionCard(
-                title: 'Expenses',
-                child: _ExpensesList(
-                  expenses: detail.expenses,
-                  memberMap: memberMap,
-                ),
+              const SizedBox(height: 12),
+
+              // Custom tab bar styling
+              TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(text: 'Expenses'),
+                  Tab(text: 'Balances'),
+                  Tab(text: 'Activity'),
+                ],
               ),
-              const SizedBox(height: 16),
-              _SectionCard(
-                title: 'History',
-                child: _HistoryList(history: detail.history),
+
+              // Tab views
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    // Tab 0: Expenses List in Read-only Mode
+                    ExpensesList(
+                      expenses: expenses,
+                      memberMap: memberMap,
+                      memberIndexMap: memberIndexMap,
+                      isReadOnly: true, // Forces read-only rendering without gestures
+                      syncStatuses: const {},
+                      onEdit: (_) {},
+                      onDelete: (_) {},
+                    ),
+
+                    // Tab 1: Balances View
+                    BalancesList(
+                      balances: balances,
+                      memberMap: memberMap,
+                      memberIndexMap: memberIndexMap,
+                    ),
+
+                    // Tab 2: Activity Timeline
+                    ActivityTimeline(events: history),
+                  ],
+                ),
               ),
             ],
           );
         },
       ),
-    );
-  }
-
-  Future<void> _showExport(BuildContext context) async {
-    final exportText = await ExportService().buildTripSummary(tripId);
-    if (!context.mounted) return;
-
-    await showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Trip Summary'),
-        content: SingleChildScrollView(
-          child: SelectableText(exportText),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: exportText));
-              Navigator.of(context).pop();
-            },
-            child: const Text('Copy'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SummaryCard extends StatelessWidget {
-  final TripDetail detail;
-  final Map<String, String> memberMap;
-
-  const _SummaryCard({required this.detail, required this.memberMap});
-
-  @override
-  Widget build(BuildContext context) {
-    final total = detail.expenses.fold<double>(
-      0,
-      (sum, expense) => sum + expense.amount,
-    );
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(detail.trip.title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text('Status: ${detail.trip.isClosed ? 'Closed' : 'Open'}'),
-            Text('Members: ${detail.members.length}'),
-            Text('Total: PKR ${total.toStringAsFixed(2)}'),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  final String title;
-  final Widget child;
-
-  const _SectionCard({required this.title, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BalancesList extends StatelessWidget {
-  final Map<String, double> balances;
-  final Map<String, String> memberMap;
-
-  const _BalancesList({required this.balances, required this.memberMap});
-
-  @override
-  Widget build(BuildContext context) {
-    if (balances.isEmpty) {
-      return const Text('No balances yet');
-    }
-    final entries = balances.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    return Column(
-      children: entries
-          .map(
-            (entry) => ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: Text(memberMap[entry.key] ?? 'Unknown'),
-              trailing: Text(
-                entry.value.toStringAsFixed(2),
-                style: TextStyle(
-                  color: entry.value >= 0
-                      ? Colors.greenAccent
-                      : Colors.redAccent,
-                ),
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
-class _ExpensesList extends StatelessWidget {
-  final List<Expense> expenses;
-  final Map<String, String> memberMap;
-
-  const _ExpensesList({required this.expenses, required this.memberMap});
-
-  @override
-  Widget build(BuildContext context) {
-    if (expenses.isEmpty) {
-      return const Text('No expenses logged');
-    }
-
-    return Column(
-      children: expenses
-          .map(
-            (expense) => ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: Text(expense.name),
-              trailing: Text('PKR ${expense.amount.toStringAsFixed(2)}'),
-              subtitle: Text(
-                'Paid by ${memberMap[expense.payerId] ?? 'Unknown'} · '
-                '${expense.beneficiaryIds.length} beneficiaries',
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
-class _HistoryList extends StatelessWidget {
-  final List<TripHistoryEvent> history;
-
-  const _HistoryList({required this.history});
-
-  @override
-  Widget build(BuildContext context) {
-    if (history.isEmpty) {
-      return const Text('No history yet');
-    }
-
-    return Column(
-      children: history
-          .map(
-            (event) => ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: Text(event.summary),
-              subtitle: Text(event.createdAt.toString()),
-            ),
-          )
-          .toList(),
     );
   }
 }

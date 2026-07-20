@@ -98,6 +98,9 @@ Implemented:
 Still deferred from this step:
 - Backoff/retry scheduling strategy beyond reconnect-triggered flush.
 
+Increment update:
+- Hardened `flushGuestQueue` to report partial failures and preserve unsent queued envelopes for future reconnect attempts.
+
 ### Step 5: Provider/UI Wiring + Validation
 Status: In Progress
 
@@ -116,9 +119,58 @@ Implemented:
 - Added sync badges in trip expenses UI:
   - `ExpensesList` now renders compact status chips (Pending/Retrying/Synced)
   - `TripScreen` passes sync-status map into `ExpensesList`
+- Added trip-context connection section in `TripScreen`:
+  - Displays role/status/peer info.
+  - Adds direct `Manage Connection` action from trip flow.
+  - Adds `Add Connected Guest As Member` quick action.
+  - Adds close-trip warning when unsynced items exist.
+- Added queue visibility support:
+  - `StorageService.getQueuedSyncEnvelopeCount` accessor.
+  - `syncQueueCountProvider` for UI consumption.
+  - Trip connection section now shows current queued sync item count.
+- Refactored trip connection UI into reusable `ConnectionStatusBanner` component for cleaner in-trip connection UX.
+- Enforced host-authority mutation constraints for Phase 3:
+  - Guest role cannot add members.
+  - Guest role cannot edit/delete expenses.
+  - Guest role cannot finish trip.
+  - Guest role cannot reopen trip.
+  - `Add Connected Guest As Member` action is host-only.
+  - Trip UI actions now disable/guard these unsupported guest operations.
 
 Pending in this step:
 - Run two-device manual validation and capture evidence logs.
+
+Increment update (functional flow):
+- Began implementing Home Hub + role-first routing from `home_hub_host_guest_flow_spec.md`.
+- Replaced inline trip creation dialog in Home with dedicated routes:
+  - `StartTripScreen` for host trip creation.
+  - `JoinTripEntryScreen` for guest discovery and request flow.
+- Updated empty-home UX copy and actions to make Host vs Guest choices explicit.
+- Implemented add-member option split in trip flow:
+  - Added `AddMemberOptionsSheet` with Local Member and Connect Guest paths.
+  - Wired host-only connected guest add flow from selected peer.
+- Hardened start/join entry UX behavior:
+  - Start Trip now resets loading state safely on failures and shows explicit error feedback.
+  - Join screen discovery controls now follow provider status (no local drift).
+  - Join screen now surfaces status/error messages and permission-settings recovery action.
+  - Join screen now remains in-place after request and exits only when connection is actually accepted.
+  - Added explicit guest request-cancel support while awaiting host confirmation.
+  - Added pending-request card with selected host context and live elapsed wait time.
+  - Fixed guest routing/sync bug: host now responds to `HANDSHAKE` with initial `SYNC_LEDGER`, and guest refreshes `tripControllerProvider`/`membersControllerProvider` upon ledger receipt to trigger reactive routing to the Trip Screen.
+  - Implemented Guest Identity, Role Gating, and Member Distinction Fixes:
+    - Sanitized `isDeviceOwner` on guest during sync ledger application to prevent host owner contaminating guest Hive box.
+    - Used `trip.deviceRole == 'guest'` as fallback for role gating in `TripScreen` to prevent reverting to host UI on provider rebuild.
+    - Validated and persisted guest name as device owner in Hive and profile before discovery on `JoinTripEntryScreen`.
+    - Auto-added guest as a managed trip member on host handshake using guest name from HandshakePayload.
+    - Persisted guest role to ProfileService on connection accepted and restored it on ConnectionController build to survive restarts/crashes.
+    - Communicated the guest's real name through Nearby Connections instead of using a hardcoded "Trippin Guest" string.
+    - Resolved the lobby-screen auto-add race condition by making SyncService handshake processing the single authority for auto-adding connected guests.
+- Detailed implementation progress is tracked in:
+  - `docs/archi/home_hub_host_guest_flow_impl.md`
+
+Execution status update:
+- Validation execution has started.
+- Evidence is being tracked in `docs/VALIDATION_LOG.md`.
 
 ## Validation Log
 - `dart analyze` on changed Phase 3 files: no issues found.
@@ -126,3 +178,35 @@ Pending in this step:
 - `dart analyze` after Step 3 inbound handling: no issues found.
 - `dart analyze` after Step 4 queue + flush wiring: no issues found.
 - `dart analyze` after Step 5 status provider + UI badges: no issues found.
+- Validation evidence tracker: `docs/VALIDATION_LOG.md`.
+- `flutter analyze` on Home/Start/Join/Trip + Connection provider slice (2026-04-09): no issues found.
+
+## Next Execution Sequence (Locked)
+1. Functional hardening first:
+  - Improve guest queue flush reliability for partial failures.
+  - Preserve idempotent merge semantics on host for repeated envelopes.
+2. Trip-context UX second:
+  - Add explicit connection state panel in Trip screen.
+  - Add in-trip action to manage connection and link connected guest as trip member.
+3. Validation third:
+  - Two-device matrix for connected/offline/reconnect flows.
+  - Local-only regression checks.
+4. Phase 3 closure docs after evidence capture.
+
+## Remaining Functional Items Before Phase 3 Sign-Off
+- Queue flush resilience improvement (partial failure handling).
+- Explicit guest update/delete behavior documentation (host-authority constraints).
+- Two-device validation evidence capture.
+
+## Known Constraints (Current Scope)
+- Android only.
+- Single guest only.
+- Host is authoritative ledger source.
+- Guest create is sync-supported; guest update/delete semantics remain constrained by host-authority flow in this phase.
+
+## Deferred Tracking
+Centralized deferred items are tracked in:
+- `docs/DEFERRED_BACKLOG.md`
+
+## Related Product Flow Spec
+- `docs/archi/home_hub_host_guest_flow_spec.md`

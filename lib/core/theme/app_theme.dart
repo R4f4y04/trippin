@@ -11,16 +11,14 @@ class AppTheme {
     const mutedText = Color(0xFF9AA4C7);
     const surface = Color(0xFF121826);
 
-    const colorScheme = ColorScheme(
+    final colorScheme = ColorScheme(
       brightness: Brightness.dark,
       primary: electricPurple,
       onPrimary: highContrastText,
       secondary: electricBlue,
       onSecondary: highContrastText,
-      error: Color(0xFFFF6B6B),
+      error: const Color(0xFFFF6B6B),
       onError: highContrastText,
-      background: navy,
-      onBackground: highContrastText,
       surface: surface,
       onSurface: highContrastText,
     );

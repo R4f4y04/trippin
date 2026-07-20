@@ -40,3 +40,7 @@ The Queue: If a Guest is disconnected, they can still use the app. Any new expen
 Reconnection: When the device reconnects to the Host, the app automatically flushes the SyncQueue (sends all pending items).
 
 Conflict Resolution: If two people edit the same expense (rare), the Host's version always wins ("Server Authority").
+
+Status Snapshot (April 2026)
+- Baseline implementation is in place for envelope transport, host-authority sync loop, and guest offline queue/reconnect flush.
+- Remaining closure work: queue resilience hardening, trip-context connection UX, and two-device validation evidence logging.

@@ -8,10 +8,14 @@ import '../models/sync_envelope.dart';
 import '../models/sync_payloads.dart';
 import 'expenses_provider.dart';
 import 'expense_sync_status_provider.dart';
+import 'sync_queue_provider.dart';
+import 'trip_provider.dart';
+import 'members_provider.dart';
 import '../services/p2p_service.dart';
 import '../services/permissions_service.dart';
 import '../services/storage_service.dart';
 import '../services/sync_service.dart';
+import '../services/profile_service.dart';
 import '../utils/app_logger.dart';
 import '../utils/safe_execute.dart';
 
@@ -38,7 +42,24 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
       _syncSubscription?.cancel();
       unawaited(_syncService.stop());
     });
+
+    // Async role restoration from persisted profile.
+    // This runs after build() returns, updating state if a persisted
+    // role exists (e.g. crash recovery mid-session).
+    _restorePersistedRole();
+
     return const ConnectionStateModel.initial();
+  }
+
+  Future<void> _restorePersistedRole() async {
+    final persistedRole = await ProfileService.instance.getDeviceRole();
+    if (persistedRole == 'guest') {
+      state = state.copyWith(role: ConnectionRole.guest);
+      AppLogger.info('Restored persisted connection role: guest.');
+    } else if (persistedRole == 'host') {
+      state = state.copyWith(role: ConnectionRole.host);
+      AppLogger.info('Restored persisted connection role: host.');
+    }
   }
 
   Future<void> startHost({required String hostName}) async {
@@ -134,7 +155,10 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
 
     await safeExecute(
       operation: () async {
-        await _p2pService.startDiscovery();
+        final owner = await _storageService.getDeviceOwner();
+        final guestName = owner?.name ?? 'Trippin Guest';
+        AppLogger.info('Starting guest scan with name: "$guestName"');
+        await _p2pService.startDiscovery(guestName: guestName);
       },
       onError: (error, stackTrace) {
         AppLogger.error('Failed to start guest scan', error, stackTrace);
@@ -159,6 +183,33 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
     );
   }
 
+  Future<void> cancelGuestRequest() async {
+    final isPendingGuestRequest =
+        state.role == ConnectionRole.guest &&
+        (state.status == ConnectionStatus.requestSent ||
+            state.status == ConnectionStatus.awaitingConfirmation);
+    if (!isPendingGuestRequest) {
+      return;
+    }
+
+    await safeExecute(
+      operation: () async {
+        await _p2pService.disconnect(connectionId: state.activeConnectionId);
+      },
+      onError: (error, stackTrace) {
+        AppLogger.error('Failed to cancel guest request', error, stackTrace);
+      },
+    );
+
+    state = state.copyWith(
+      status: ConnectionStatus.idle,
+      activeConnectionId: null,
+      clearSelectedDevice: true,
+      statusMessage: 'Connection request canceled.',
+      clearErrorMessage: true,
+    );
+  }
+
   Future<void> requestConnection(DiscoveredDevice device) async {
     state = state.copyWith(
       status: ConnectionStatus.requestSent,
@@ -168,7 +219,10 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
 
     await safeExecute(
       operation: () async {
-        await _p2pService.requestConnection(device);
+        final owner = await _storageService.getDeviceOwner();
+        final guestName = owner?.name ?? 'Trippin Guest';
+        AppLogger.info('Requesting connection as "$guestName"');
+        await _p2pService.requestConnection(device, guestName: guestName);
       },
       onError: (error, stackTrace) {
         AppLogger.error('Failed to send connection request', error, stackTrace);
@@ -324,6 +378,10 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
         );
         if (state.role == ConnectionRole.guest) {
           unawaited(_sendGuestHandshake());
+          unawaited(ref.read(syncQueueCountProvider.notifier).refresh());
+          // Persist guest role for crash recovery and role gating.
+          unawaited(ProfileService.instance.setDeviceRole('guest'));
+          AppLogger.info('Guest role persisted to ProfileService.');
         }
         state = state.copyWith(
           status: ConnectionStatus.connected,
@@ -342,6 +400,7 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
         break;
       case P2PEventType.disconnected:
         unawaited(_syncService.stop());
+        unawaited(ref.read(syncQueueCountProvider.notifier).refresh());
         state = state.copyWith(
           status: ConnectionStatus.disconnected,
           activeConnectionId: null,
@@ -363,6 +422,11 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
 
   void _handleSyncEvent(SyncEvent event) {
     switch (event.type) {
+      case SyncEventType.guestMemberAddedOnHost:
+        AppLogger.info('Guest member added on host — refreshing members and trip.');
+        unawaited(ref.read(membersControllerProvider.notifier).refresh());
+        unawaited(ref.read(tripControllerProvider.notifier).refresh());
+        break;
       case SyncEventType.expenseMergedOnHost:
         final hostEnvelope = event.envelope;
         if (hostEnvelope != null &&
@@ -383,28 +447,45 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
               .read(expenseSyncStatusProvider.notifier)
               .markManySynced(payload.expenses.map((item) => item.id));
         }
+        unawaited(ref.read(tripControllerProvider.notifier).refresh());
+        unawaited(ref.read(membersControllerProvider.notifier).refresh());
         unawaited(ref.read(expensesControllerProvider.notifier).refresh());
         break;
       case SyncEventType.envelopeReceived:
       case SyncEventType.envelopeSent:
       case SyncEventType.invalidEnvelope:
       case SyncEventType.queueFlushed:
+      case SyncEventType.finishTripReceived:
+        if (event.type == SyncEventType.queueFlushed) {
+          unawaited(ref.read(syncQueueCountProvider.notifier).refresh());
+        }
+        if (event.type == SyncEventType.finishTripReceived) {
+          unawaited(ref.read(tripControllerProvider.notifier).refresh());
+          unawaited(ref.read(expensesControllerProvider.notifier).refresh());
+        }
         break;
     }
   }
 
   Future<void> _sendGuestHandshake() async {
     final owner = await _storageService.getDeviceOwner();
-    final trip = await _storageService.getActiveTrip();
-    if (owner == null || trip == null) {
+    if (owner == null) {
+      AppLogger.warning('Cannot send handshake: no device owner.');
       return;
     }
 
-    final members = await _storageService.getUsersByIds(trip.memberIds);
-    final managedMemberIds = members
-        .where((user) => user.managedBy == owner.id)
-        .map((user) => user.id)
-        .toList();
+    // The guest may not have a local trip yet — the trip is created when the
+    // host responds with a SYNC_LEDGER.  Send the handshake with whatever
+    // managed-member info is available (empty list when no trip exists).
+    final trip = await _storageService.getActiveTrip();
+    List<String> managedMemberIds = [];
+    if (trip != null) {
+      final members = await _storageService.getUsersByIds(trip.memberIds);
+      managedMemberIds = members
+          .where((user) => user.managedBy == owner.id)
+          .map((user) => user.id)
+          .toList();
+    }
 
     final payload = HandshakePayload(
       deviceId: owner.id,
@@ -412,5 +493,6 @@ class ConnectionController extends Notifier<ConnectionStateModel> {
       managedMemberIds: managedMemberIds,
     );
     await _syncService.sendHandshake(payload);
+    AppLogger.info('Guest handshake sent (deviceId=${owner.id}).');
   }
 }

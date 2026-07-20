@@ -1,146 +1,60 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/riverpod/expenses_provider.dart';
-import '../../core/riverpod/members_provider.dart';
-import '../../core/riverpod/trip_provider.dart';
-import '../../ui_components/primary_button.dart';
 import '../about/about_screen.dart';
 import '../history/trip_history_screen.dart';
+import '../join_trip/join_trip_entry_screen.dart';
 import '../settings/settings_screen.dart';
-import '../trip/components/error_state.dart';
-import '../trip/trip_screen.dart';
+import '../start_trip/start_trip_screen.dart';
 import 'empty_home_screen.dart';
 
-class HomeScreen extends ConsumerStatefulWidget {
+/// Home Hub screen — shown ONLY when there is no active trip.
+///
+/// Routing between Home Hub and Trip Screen is handled by [AppShell]
+/// in main.dart. This widget simply displays the hub with navigation actions.
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
-  ConsumerState<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends ConsumerState<HomeScreen> {
-  @override
-  Widget build(BuildContext context) {
-    final tripAsync = ref.watch(tripControllerProvider);
-
-    return tripAsync.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      body: EmptyHomeScreen(
+        onStartTrip: () => _openStartTrip(context),
+        onJoinTrip: () => _openJoinTrip(context),
+        onOpenHistory: () => _openTripHistory(context),
+        onOpenSettings: () => _openSettings(context),
+        onOpenAbout: () => _openAbout(context),
       ),
-      error: (error, _) => Scaffold(
-        body: ErrorState(
-          message: 'Failed to load trip',
-          onRetry: () => ref.read(tripControllerProvider.notifier).refresh(),
-        ),
-      ),
-      data: (trip) {
-        if (trip != null) {
-          return const TripScreen();
-        }
-
-        return Scaffold(
-          body: EmptyHomeScreen(
-            onStartTrip: _showCreateTripDialog,
-            onOpenHistory: _openTripHistory,
-            onOpenSettings: _openSettings,
-            onOpenAbout: _openAbout,
-            onCreateSampleTrip: _createSampleTrip,
-          ),
-        );
-      },
     );
   }
 
-  Future<void> _showCreateTripDialog() async {
-    final titleController = TextEditingController();
-    final ownerController = TextEditingController();
-
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        bool isSaving = false;
-        return StatefulBuilder(
-          builder: (context, setState) => AlertDialog(
-            title: const Text('Create Trip'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Trip Title'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: ownerController,
-                  decoration:
-                      const InputDecoration(labelText: 'Your Name (Owner)'),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              PrimaryButton(
-                label: 'Create',
-                isLoading: isSaving,
-                onPressed: () async {
-                  final title = titleController.text.trim();
-                  final ownerName = ownerController.text.trim();
-                  if (title.isEmpty || ownerName.isEmpty) {
-                    _showSnack('Title and owner name are required');
-                    return;
-                  }
-                  setState(() => isSaving = true);
-                  await ref.read(tripControllerProvider.notifier).createTrip(
-                        title: title,
-                        ownerName: ownerName,
-                      );
-                  await ref.read(membersControllerProvider.notifier).refresh();
-                  await ref.read(expensesControllerProvider.notifier).refresh();
-                  if (mounted) {
-                    Navigator.of(context).pop();
-                    _showSnack('Trip created');
-                  }
-                },
-              ),
-            ],
-          ),
-        );
-      },
+  void _openStartTrip(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const StartTripScreen()),
     );
   }
 
-  void _openTripHistory() {
+  void _openJoinTrip(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const JoinTripEntryScreen()),
+    );
+  }
+
+  void _openTripHistory(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const TripHistoryScreen()),
     );
   }
 
-  void _openSettings() {
+  void _openSettings(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const SettingsScreen()),
     );
   }
 
-  void _openAbout() {
+  void _openAbout(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const AboutScreen()),
-    );
-  }
-
-  Future<void> _createSampleTrip() async {
-    await ref.read(tripControllerProvider.notifier).createSampleTrip();
-    await ref.read(membersControllerProvider.notifier).refresh();
-    await ref.read(expensesControllerProvider.notifier).refresh();
-    _showSnack('Sample trip created');
-  }
-
-  void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
     );
   }
 }

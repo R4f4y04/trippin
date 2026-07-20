@@ -16,6 +16,8 @@ enum SyncEventType {
   expenseMergedOnHost,
   ledgerAppliedOnGuest,
   queueFlushed,
+  finishTripReceived,
+  guestMemberAddedOnHost,
 }
 
 class SyncEvent {
@@ -95,7 +97,15 @@ class SyncService {
     required String tripId,
     required List<Expense> expenses,
   }) async {
-    final payload = SyncLedgerPayload(tripId: tripId, expenses: expenses);
+    final trip = await _storage.getTrip(tripId);
+    final members = trip != null ? await _storage.getUsersByIds(trip.memberIds) : null;
+
+    final payload = SyncLedgerPayload(
+      tripId: tripId,
+      tripTitle: trip?.title,
+      expenses: expenses,
+      members: members,
+    );
     final envelope = SyncEnvelope.create(
       type: SyncMessageType.syncLedger,
       payload: payload.toJson(),
@@ -108,6 +118,14 @@ class SyncService {
     final envelope = SyncEnvelope.create(
       type: SyncMessageType.heartbeat,
       payload: payload.toJson(),
+    );
+    await _sendEnvelope(envelope);
+  }
+
+  Future<void> sendFinishTrip({required String tripId}) async {
+    final envelope = SyncEnvelope.create(
+      type: SyncMessageType.finishTrip,
+      payload: {'tripId': tripId},
     );
     await _sendEnvelope(envelope);
   }
@@ -130,6 +148,7 @@ class SyncService {
     }
 
     var sentCount = 0;
+    var failedCount = 0;
     for (final envelope in queued) {
       try {
         await _sendEnvelope(envelope);
@@ -137,14 +156,18 @@ class SyncService {
         sentCount += 1;
       } catch (error, stackTrace) {
         AppLogger.error('Queue flush interrupted', error, stackTrace);
-        break;
+        failedCount += 1;
+        if (!_p2pService.hasActiveConnection) {
+          break;
+        }
       }
     }
 
     _eventController.add(
       SyncEvent(
         type: SyncEventType.queueFlushed,
-        message: 'Flushed $sentCount queued envelope(s).',
+        message:
+            'Flushed $sentCount queued envelope(s), $failedCount failed this attempt.',
       ),
     );
   }
@@ -190,6 +213,62 @@ class SyncService {
       return;
     }
 
+    if (role == SyncRole.host && envelope.type == SyncMessageType.handshake) {
+      final payload = HandshakePayload.fromJson(envelope.payload);
+      AppLogger.info(
+        'Host received guest HANDSHAKE — '
+        'deviceId=${payload.deviceId}, deviceName=${payload.deviceName}.',
+      );
+
+      final activeTrip = await _storage.getActiveTrip();
+      if (activeTrip == null) {
+        AppLogger.warning('Host has no active trip to send in SYNC_LEDGER.');
+        return;
+      }
+
+      // Auto-add the guest as a trip member if not already present.
+      // Use the guest's deviceName from the handshake payload.
+      final existingMembers = await _storage.getUsersByIds(activeTrip.memberIds);
+      final guestAlreadyMember = existingMembers.any(
+        (m) => m.name.trim().toLowerCase() == payload.deviceName.trim().toLowerCase(),
+      );
+
+      if (!guestAlreadyMember && payload.deviceName.trim().isNotEmpty) {
+        final hostOwner = await _storage.getDeviceOwner();
+        if (hostOwner != null) {
+          final addedMember = await _storage.addMemberToTrip(
+            tripId: activeTrip.id,
+            name: payload.deviceName.trim(),
+            managedBy: hostOwner.id,
+            id: payload.deviceId,
+          );
+          AppLogger.info(
+            'Host auto-added guest "${payload.deviceName}" as trip member '
+            '(id=${addedMember?.id}).',
+          );
+        }
+      } else if (guestAlreadyMember) {
+        AppLogger.info(
+          'Guest "${payload.deviceName}" already exists in trip members.',
+        );
+      }
+
+      // Re-read the trip to pick up the newly added member in the ledger.
+      final updatedTrip = await _storage.getTrip(activeTrip.id);
+      final ledger = await _storage.getExpensesByTrip(activeTrip.id);
+      await sendSyncLedger(tripId: activeTrip.id, expenses: ledger);
+      AppLogger.info(
+        'Host sent initial SYNC_LEDGER with ${ledger.length} expenses '
+        'and ${updatedTrip?.memberIds.length ?? 0} members.',
+      );
+
+      // Notify listeners so the host UI refreshes its member list.
+      _eventController.add(
+        const SyncEvent(type: SyncEventType.guestMemberAddedOnHost),
+      );
+      return;
+    }
+
     if (role == SyncRole.host && envelope.type == SyncMessageType.addExpense) {
       final payload = AddExpensePayload.fromJson(envelope.payload);
       await _storage.mergeSyncedExpense(expense: payload.expense);
@@ -206,9 +285,20 @@ class SyncService {
       await _storage.replaceTripExpensesFromSync(
         tripId: payload.tripId,
         expenses: payload.expenses,
+        tripTitle: payload.tripTitle,
+        members: payload.members,
       );
       _eventController.add(
         SyncEvent(type: SyncEventType.ledgerAppliedOnGuest, envelope: envelope),
+      );
+      return;
+    }
+
+    if (role == SyncRole.guest && envelope.type == SyncMessageType.finishTrip) {
+      final tripId = envelope.payload['tripId'] as String;
+      await _storage.closeTrip(tripId: tripId);
+      _eventController.add(
+        SyncEvent(type: SyncEventType.finishTripReceived, envelope: envelope),
       );
       return;
     }
